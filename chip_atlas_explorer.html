@@ -1,0 +1,960 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <meta charset="utf-8"/>
+        <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1"/>
+        
+        <title>ChIP Atlas</title>
+        
+        <link rel="preconnect" href="https://fonts.googleapis.com">
+        <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+        <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Mono:wght@100..900&family=Noto+Sans:ital,wght@0,100..900;1,100..900&family=Noto+Serif:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:ital,wght@0,100..700;1,100..700&family=Roboto+Serif:ital,opsz,wght@0,8..144,100..900;1,8..144,100..900&family=Roboto:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:ital,wght@0,200..800;1,200..800&family=Atkinson+Hyperlegible+Next:ital,wght@0,200..800;1,200..800&display=swap" rel="stylesheet">
+
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+
+        <style>
+            html { -webkit-text-size-adjust: 100%; }
+            body { padding: 0; margin: 0; }
+            
+            :root {
+                --font-family: "Roboto", system-ui, sans-serif;
+                --font-family-mono: "Roboto Mono", ui-monospace, monospace;
+            }
+
+            main {
+                font-family: var(--font-family);
+                font-size: 13px;
+            }
+
+            a {
+                color: oklch(60% 0.118 184.704);
+                text-decoration: none;
+                cursor: pointer;
+            }
+            a:hover {
+                text-decoration: underline;
+            }
+
+            .appear-smoothly {
+                animation: appearSmoothly 0.4s ease;
+            }
+            @keyframes appearSmoothly {
+                from { opacity: 0; }
+                to { opacity: 1; }
+            }
+
+            #explorer {
+                display: grid;
+                grid-template-columns: 600px 1fr;
+                height: 100dvh;
+            }
+
+            #samples-list-wrapper {
+                overflow-y: auto;
+                overflow-x: auto;
+                padding: 20px;
+            }
+            #samples-list {
+                display: grid;
+                grid-template-columns: repeat(4, max-content);
+                column-gap: 20px;
+                row-gap: 10px;
+            }
+            #samples-list > div {
+                display: contents;
+            }
+            #samples-list > div:not(:nth-child(1)):hover {
+                color: oklch(60% 0.118 184.704);
+            }
+            #samples-list > div:nth-child(1) {
+                font-weight: bold;
+            }
+            #samples-list > div:nth-child(1) > div {
+                display: flex;
+                flex-direction: row;
+                align-items: center;
+                column-gap: 5px;
+            }
+            #samples-list > div > div {
+                min-width: 40px;
+                max-width: 280px;
+            }
+            #samples-list > div:not(div:nth-child(1)) > div > div:nth-child(2) {
+                font-size: 10px;
+                color: oklch(70.7% 0.022 261.325);
+            }
+            #samples-list > div:nth-child(1) > div,
+            #samples-list > div > div:nth-child(1) {
+                cursor: pointer;
+            }
+
+            #panel {
+                border-left: 1px solid black;
+                position: sticky;
+                top: 0px;
+                display: grid;
+                grid-template-columns: 1fr 2fr;
+                grid-template-rows: auto 1fr;
+                height: 100dvh;
+            }
+            #panel > div:nth-child(1) {
+                grid-area: 1 / 1 / 2 / 3;
+            }
+            #panel > div:nth-child(2) {
+                grid-area: 2 / 1 / 3 / 2;
+            }
+            #panel > div:nth-child(3) {
+                grid-area: 2 / 2 / 3 / 3;
+            }
+
+            #controls {
+                padding-bottom: 10px;
+                padding-bottom: 20px;
+                border-bottom: 1px solid black;
+                padding: 20px;
+                display: flex;
+                flex-direction: column;
+                row-gap: 10px;
+            }
+
+            #controls > div:not(#search-control) {
+                display: flex;
+                flex-direction: row;
+                column-gap: 10px;
+            }
+
+            #search-control {
+                display: grid;
+                grid-template-columns: max-content auto max-content;
+                column-gap: 10px;
+                border-bottom: 1px solid oklch(92.8% 0.006 264.531);
+                padding-bottom: 3px;
+            }
+
+            #search-control:hover,
+            #search-control:focus-within {
+                border-bottom: 1px solid oklch(60% 0.118 184.704);
+            }
+
+            #search-control #search {
+                outline: none;
+            }
+
+            #samples-aliases {
+                padding: 20px;
+                overflow-y: auto;
+                display: flex;
+                flex-direction: column;
+                gap: 15px;
+                word-break: break-word;
+            }
+
+            #full-sample {
+                display: flex;
+                flex-direction: column;
+                gap: 15px;
+                padding: 20px;
+                border-left: 1px solid black;
+                overflow-y: auto;
+            }
+
+            #full-sample .fields,
+            #full-sample .logs,
+            #full-sample .attributes,
+            #full-sample .aliases,
+            #full-sample .links,
+            #full-sample .geo-more-info {
+                display: flex;
+                flex-direction: column;
+                gap: 5px;
+            }
+
+            #full-sample .key-value-pair > div:first-child {
+                display: inline;
+                font-weight: bold;
+                margin-right: 10px;
+            }
+            #full-sample .key-value-pair > div:nth-child(2) {
+                display: inline;
+            }
+            #full-sample .key-value-pair > div:nth-child(2) > :not(:last-child) {
+                margin-right: 10px;
+            }
+
+
+        </style>
+    </head>
+    <body>
+        <main>
+
+            <div id="explorer">
+                <div id="samples-list-wrapper">
+                    <div id="samples-list"></div>
+                </div>
+                <div id="panel">
+                    <div id="controls">
+                        <div>
+                            <div>Database:</div>
+                            <a onclick="databaseControl('toggle-full')" id="toggle-full">Use full</a>
+                            <a onclick="databaseControl('clear-cache')">Clear cache</a>
+                            <a onclick="alert('Not implemented yet.')">Update server</a>
+                        </div>
+                        <div id="genome-control"">
+                            <div>Genome:</div>
+                            <span id="genome">mm10</span>
+                        </div>
+                        <div id="search-control">
+                            <div>Search:</div>
+                            <div id="search" contenteditable="plaintext-only" oninput="searchSamples()"></div>
+                            <div id="search-count"></div>
+                        </div>
+                    </div>
+                    <div id="samples-aliases"></div>
+                    <div id="full-sample"></div>
+                </div>
+            </div>
+
+
+
+        </main>
+        <script>
+"use strict";
+
+let STATE = {
+    useFullDatabase: false,
+    database: {},
+    databaseGenomes: null,
+    genesAliases: {},
+    genesAliasesInserted: {},
+    sort: {by: 6, reverse: true},
+};
+
+
+async function readCache(key) {
+    return new Promise((resolve, reject) => {
+        let request = indexedDB.open("chip-atlas-cache", 1);
+        request.onupgradeneeded = (e) => {
+            let db = e.target.result;
+            if (!db.objectStoreNames.contains("cache")) {
+                db.createObjectStore("cache");
+            }
+        };
+        request.onsuccess = async (e) => {
+            let db = e.target.result;
+            let transaction = db.transaction("cache", "readonly");
+            let store = transaction.objectStore("cache");
+            let getRequest = store.get(key);
+            getRequest.onsuccess = async () => {
+                if (!getRequest.result) {
+                    resolve(null);
+                    return;
+                }
+                let decompressionStream = new DecompressionStream("gzip");
+                let decompressedStream = new Blob([getRequest.result]).stream().pipeThrough(decompressionStream);
+                let data = await new Response(decompressedStream).text();
+                resolve(data);
+            };
+            getRequest.onerror = () => reject(getRequest.error);
+        };
+        request.onerror = () => reject(request.error);
+    });
+}
+
+async function writeCache(key, data) {
+    let compressionStream = new CompressionStream("gzip");
+    let compressedStream = new Blob([data]).stream().pipeThrough(compressionStream);
+    let compressedData = new Uint8Array(await new Response(compressedStream).arrayBuffer());
+    
+    return new Promise((resolve, reject) => {
+        let request = indexedDB.open("chip-atlas-cache", 1);
+        request.onupgradeneeded = (e) => {
+            let db = e.target.result;
+            if (!db.objectStoreNames.contains("cache")) {
+                db.createObjectStore("cache");
+            }
+        };
+        request.onsuccess = (e) => {
+            let db = e.target.result;
+            let transaction = db.transaction("cache", "readwrite");
+            let store = transaction.objectStore("cache");
+            let putRequest = store.put(compressedData, key);
+            putRequest.onsuccess = () => resolve();
+            putRequest.onerror = () => {
+                console.error("Failed to write cache to IndexedDB:", putRequest.error);
+                resolve(); // Don't reject, just log
+            };
+        };
+        request.onerror = () => {
+            console.error("Failed to open IndexedDB:", request.error);
+            resolve(); // Don't reject, just log
+        };
+    });
+}
+
+async function clearCache() {
+    return new Promise((resolve, reject) => {
+        let request = indexedDB.deleteDatabase("chip-atlas-cache");
+        request.onsuccess = () => resolve();
+        request.onerror = () => reject(request.error);
+    });
+}
+
+
+async function databaseControl(key) {
+    if (key === "toggle-full") {
+        STATE.useFullDatabase = !STATE.useFullDatabase;
+        document.getElementById("toggle-full").textContent = STATE.useFullDatabase ? "Use minimal" : "Use full";
+        await searchSamples();
+    } else if (key === "clear-state") {
+        STATE.database = {};
+        STATE.databaseGenomes = null;
+        STATE.genesAliases = {};
+        STATE.genesAliasesInserted = {};
+        STATE.sort = {by: null, reverse: false};
+    } else if (key === "clear-cache") {
+        await databaseControl("clear-state");
+        await clearCache();
+        await getDatabaseGenomes({cache: "write"});
+        await getDatabase({genome: document.querySelector("#genome").textContent, cache: "write"});
+        await getGenesAliases({genome: document.querySelector("#genome").textContent, cache: "write"});
+        await getGenesAliases({genome: "mm10", cache: "write"});
+        await getGenesAliases({genome: "hg38", cache: "write"});
+        await searchSamples();
+    } else if (key === "update-database") {
+        throw new Error(`Not implemented`);
+    } else {
+        throw new Error(`Unknown database control key: ${key}`);
+    }
+}
+
+
+async function getDatabaseGenomes({cache="read_write"}={}) {
+    if (STATE.databaseGenomes) return STATE.databaseGenomes;
+    let data;
+    let cached = await readCache(`database-genomes`);
+    if (cached && cache.includes("read")) {
+        data = JSON.parse(cached);
+    } else {
+        //let response = await fetch("/data-server/v2/chip-atlas/get-database-genomes");
+        let url = "https://raw.githubusercontent.com/ajg-machine/chip-atlas/main/database/genomes.json";
+        let response = await fetch(url);
+        if (!response.ok) throw new Error(response);
+        data = await response.json();
+        if (cache.includes("write")) {
+            await writeCache(`database-genomes`, JSON.stringify(data));
+        }
+    }
+    STATE.databaseGenomes = data;
+    return data;
+}
+
+
+async function getDatabase({genome, cache="read_write"}={}) {
+    genome = genome.toLowerCase();
+    if (STATE.database[genome]) return STATE.database[genome];
+    let data;
+    let cached = await readCache(`full-database-${genome}`);
+    if (cached && cache.includes("read")) {
+        data = cached;
+    } else {
+        //let response = await fetch(`/data-server/v2/chip-atlas/get-database?genome=${genome}&full=${full}`);
+        //if (!response.ok) throw new Error(response);
+        //data = await response.text();
+        let file = `${genome}.full.tsv.gz`;
+        let url = `https://raw.githubusercontent.com/ajg-machine/chip-atlas/main/database/genomes/${file}`;
+        let response = await fetch(url);
+        if (!response.ok) throw new Error(response);
+        let decompressionStream = new DecompressionStream("gzip");
+        let decompressedStream = response.body.pipeThrough(decompressionStream);
+        data = await new Response(decompressedStream).text();
+        if (cache.includes("write")) {
+            await writeCache(`full-database-${genome}`, data);
+        }
+    }
+    data = data
+        .trimEnd().split("\n")
+        .map(line => line.split("\t"))
+        .map(line => [...line, ""])
+        .map(line => line.map(entry => [entry, entry.toLowerCase().replace(/[^\w()/]+/g, "")]));
+    STATE.database[genome] = data;
+    return data;
+}
+
+
+async function getFullSampleData({genome, srx, offset}={}) {
+    throw new Error(`Use full database`);
+    if (STATE.fullSampleData[srx]) return STATE.fullSampleData[srx];
+    let url = `/data-server/v2/chip-atlas/search?genome=${genome}&srx=${srx}`;
+    if (offset !== undefined) url += `&offset=${offset}`;
+    let response = await fetch(url);
+    if (!response.ok) throw new Error(response);
+    let data = await response.json();
+    data[8] = data[8] === "?" ? [] : data[8].split(",");
+    data[9] = data[9].split(";").map(x => x.split("="));
+    STATE.fullSampleData[srx] = data;
+    return data;
+}
+
+async function getGenesAliases({genome, cache="read_write"}={}) {
+    if (STATE.genesAliases[genome]) return STATE.genesAliases[genome];
+    let data;
+    let cached = await readCache(`genes-aliases-${genome}`);
+    if (cached && cache.includes("read")) {
+        data = cached;
+    } else {
+        //let url = `/data-server/v2/chip-atlas/get-genes-aliases?genome=${genome}`;
+        //let response = await fetch(url);
+        //if (!response.ok) throw new Error(response);
+        //data = await response.text();
+        let file = {
+            hg38: "hugo_genenames.aliases.json.gz",
+            mm10: "mgi_markers.aliases.json.gz",
+        }[genome];
+        if (file) {
+            let url = `https://raw.githubusercontent.com/ajg-machine/chip-atlas/main/genes/${file}`;
+            let response = await fetch(url);
+            if (!response.ok) throw new Error(response);
+            let decompressionStream = new DecompressionStream("gzip");
+            let decompressedStream = response.body.pipeThrough(decompressionStream);
+            data = await new Response(decompressedStream).text();
+        } else {
+            data = "[]";
+        }
+        if (cache.includes("write")) {
+            await writeCache(`genes-aliases-${genome}`, data);
+        }
+    }
+    data = JSON.parse(data);
+    data = Object.fromEntries(data.map(entry => [entry[0].toLowerCase().replace(/[^\w()/]+/g, ""), entry]));
+    STATE.genesAliases[genome] = data;
+    if (!STATE.genesAliasesInserted[genome]) {
+        STATE.genesAliasesInserted[genome] = true;
+        let database = await getDatabase({genome});
+        for (let entry of database) {
+            let minimalName = entry[5][1].match(/^([^/(]*).*$/)[1];
+            let aliases = data[minimalName];
+            if (!aliases) continue;
+            aliases = [aliases[1], ...aliases[2]]
+                .map(alias => alias.toLowerCase().replace(/[^\w()/]+/g, ""));
+            entry[10][1] = (entry[10][1] ? entry[10][1] + " " : "") + aliases.join(" ");            
+        }
+    }
+    return data;
+}
+
+async function updateSamplesList({genome, database}={}) {
+    document.getElementById("search-count").textContent = `${database.length} samples`;
+    let samplesDiv = document.getElementById("samples-list");
+    samplesDiv.textContent = "";
+
+    let rowDiv = samplesDiv.appendChild(document.createElement("div"));
+    for (let [title, sortIndex] of [["Date", 6], ["IDs", 0], ["Sample", 5], ["Cell", 4]]) {
+        let div = rowDiv.appendChild(document.createElement("div"));
+        let titleDiv = div.appendChild(document.createElement("div"));
+        div.appendChild(document.createElement("div"));
+        titleDiv.textContent = title;
+        div.dataset.sortIndex = sortIndex;
+        if (STATE.sort.by === Number(div.dataset.sortIndex)) {
+            div.children[1].textContent = STATE.sort.reverse ? "▼" : "▲";
+        }
+        div.onclick = () => {
+            if (STATE.sort.by === Number(div.dataset.sortIndex)) {
+                STATE.sort.reverse = !STATE.sort.reverse;
+            } else {
+                STATE.sort.by = Number(div.dataset.sortIndex);
+            }
+            searchSamples();
+        };
+    }
+
+    let makeItemsDivs = (rowDiv) => {
+        let itemsDivs = [];
+        for (let i = 0; i < 4; i++) {
+            let itemDiv = rowDiv.appendChild(document.createElement("div"));
+            let mainItemDiv = itemDiv.appendChild(document.createElement("div"));
+            let subItemDiv = itemDiv.appendChild(document.createElement("div"));
+            itemsDivs.push([mainItemDiv, subItemDiv]);
+        }
+        return itemsDivs;
+    };
+
+    for (let [index, sample] of database.entries()) {
+        rowDiv = samplesDiv.appendChild(document.createElement("div"));
+        let itemDivs = makeItemsDivs(rowDiv);
+
+        
+        if (index >= 500) {
+            itemDivs[3][0].textContent = `[ + ${database.length - 500} more ]`;
+            break;
+        }
+
+        itemDivs[0][0].textContent = sample[6][0];
+        itemDivs[0][1].textContent = "+ Expand data";
+        itemDivs[0][0].onclick = () => showFullSample({genome, srx: sample[2][0]});
+        itemDivs[0][1].onclick = () => showFullSample({genome, srx: sample[2][0]});
+        itemDivs[1][0].textContent = sample[0][0];
+        itemDivs[1][1].textContent = sample[2][0];
+        itemDivs[2][0].textContent = sample[5][0].match(/^([^(]*).*$/)[1];
+        itemDivs[2][1].textContent = (sample[5][0].match(/^[^(]*\(([^(]*)\)$/) || ["", ""])[1];
+        if (itemDivs[2][0].textContent.match(/^RNA polymerase ([IVX]+)$/i)) {
+            itemDivs[2][0].textContent = "Pol " + itemDivs[2][0].textContent.match(/^RNA polymerase ([IVX]+)$/i)[1];
+            itemDivs[2][1].textContent = "RNA polymerase";
+        } else if (itemDivs[2][0].textContent === "Input control") {
+            itemDivs[2][0].textContent = "Input"
+            itemDivs[2][1].textContent = "Control";
+        } else if (itemDivs[2][0].textContent.match(/^([^-]+)-Seq$/i)) {
+            itemDivs[2][0].textContent = itemDivs[2][0].textContent.match(/^([^-]+)-Seq$/i)[1];
+            itemDivs[2][1].textContent = "Seq";
+        }
+        itemDivs[3][0].textContent = sample[4][0].match(/^([^(]*).*$/)[1];
+        itemDivs[3][1].textContent = (sample[4][0].match(/^[^(]*\(([^(]*)\)$/) || ["", ""])[1];
+
+
+
+    }
+
+}
+
+
+async function searchSamples() {
+    let genome = document.querySelector("#genome").textContent;
+    let database = await getDatabase({genome});
+    let queryString = document.querySelector("#search").textContent;
+    let searchFieldsIndexes = STATE.useFullDatabase
+        ? [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
+        : [0, 1, 2, 3, 4, 5, 6, 10];
+
+    // Parse query string into a tree structure
+    let parseQuery = (str) => {
+        str = str.trim();
+        
+        // Check if it's wrapped in parentheses with an operator
+        let strMatch = str.match(/^\(\s*(and|or|xor|not):\s*(.+?)\s*\)$/i);
+        if (strMatch) {
+            let [operator, content] = [strMatch[1].toLowerCase(), strMatch[2]];
+            return {type: operator, children: parseQueryList(content)};
+        }
+        
+        // Check if it's wrapped in parentheses without an operator (default to AND)
+        if (str.match(/^\(.+\)$/)) {
+            let content = str.slice(1, -1).trim();
+            return {type: "and", children: parseQueryList(content)};
+        }
+        
+        // Check if multiple terms without parentheses (default to AND)
+        let content = str.split(/\s+/);
+        if (content.length > 1) {
+            return {type: "and", children: content.map(parseQueryList)};
+        }
+        
+        // Single term (no parentheses or operator)
+        let normalized = str
+            .toLowerCase()
+            .replace(/[^\w()/]+/g, "");
+        
+        // Handle pol1-9 to roman numerals - create OR with both versions
+        if (normalized.match(/^pol([ivx\d]+)$/)) {
+            let x = normalized.match(/^pol([ivx\d]+)$/)[1];
+            let roman =
+                x === "1" ? "i" : x === "2" ? "ii" :
+                x === "3" ? "iii" : x === "4" ? "iv" :
+                x === "5" ? "v" : x === "6" ? "vi" :
+                x === "7" ? "vii" : x === "8" ? "viii" :
+                x === "9" ? "ix" : x;
+            let romanForm = `rnapolymerase${roman}`;
+            return {
+                type: "or",
+                children: [
+                    {type: "term", value: normalized},
+                    {type: "term", value: romanForm}
+                ]
+            };
+        }
+        return {type: "term", value: normalized};
+    };
+    
+    let parseQueryList = (str) => {
+        let terms = [];
+        let depth = 0;
+        let current = "";
+        for (let i = 0; i < str.length; i++) {
+            let char = str[i];
+            if (char === "(") {
+                depth++;
+                current += char;
+            } else if (char === ")") {
+                depth--;
+                current += char;
+            } else if (char === " " && depth === 0) {
+                if (current.trim().length > 0) {
+                    terms.push(parseQuery(current.trim()));
+                    current = "";
+                }
+            } else {
+                current += char;
+            }
+        }
+        if (current.trim().length > 0) {
+            terms.push(parseQuery(current.trim()));
+        }
+        return terms;
+    };
+    
+    // Evaluate query tree against a sample
+    let evaluateQuery = (query, sample) => {
+        if (query.type === "term") {
+            for (let fieldIndex of searchFieldsIndexes) {
+                let field = sample[fieldIndex];
+                if (field[1].includes(query.value)) {
+                    return true;
+                }
+            }
+            return false;
+        } else if (query.type === "and") {
+            return query.children.every(child => evaluateQuery(child, sample));
+        } else if (query.type === "or") {
+            return query.children.some(child => evaluateQuery(child, sample));
+        } else if (query.type === "xor") {
+            let matches = query.children.filter(child => evaluateQuery(child, sample));
+            return matches.length === 1;
+        } else if (query.type === "not") {
+            return !query.children.every(child => evaluateQuery(child, sample));
+        }
+        return false;
+    };
+    
+    // Get genes aliases
+    let aliasesDiv = document.getElementById("samples-aliases");
+    aliasesDiv.textContent = "";
+    let allAliases = await getGenesAliases({genome: document.querySelector("#genome").textContent});
+
+    // Parse the query string
+    queryString = queryString.trim();
+    let results = database;
+    if (queryString.length !== 0) {
+        let queries = parseQuery(queryString);
+        // Filter database
+        results = database.filter(sample => evaluateQuery(queries, sample));
+    } else {
+        results = Array.from(database);
+    }
+
+    // Sort results
+    let sortFn = (a, b) => {
+        if (a === "?" || b === "?") {
+            if (a === "?" && b === "?") return 0;
+            if (a === "?") return 1;
+            return -1;
+        }
+        return (STATE.sort.reverse ? -1 : 1) * a.localeCompare(b);
+        if (a < b) return STATE.sort.reverse ? 1 : -1;
+        if (a > b) return STATE.sort.reverse ? -1 : 1;
+        return 0;
+    };
+    if (STATE.sort.by != null) {
+        results.sort((a, b) => sortFn(a[STATE.sort.by][0], b[STATE.sort.by][0]));
+    }
+
+    // Update targets list
+    let uniqueTargets = new Map();
+    for (let entry of results) {
+        uniqueTargets.set(entry[5][0], entry);
+    }
+    uniqueTargets = Array.from(uniqueTargets.values());
+    for (let entry of uniqueTargets.slice(0, 1000)) {
+        let div = aliasesDiv.appendChild(document.createElement("div"));
+        //let entryNameDiv = div.appendChild(document.createElement("a"));
+        //entryNameDiv.textContent = entry[5][0].match(/^([^/(]*).*$/)[1];
+
+        let entryNameDiv = div.appendChild(document.createElement("a"));
+        let entryNameTerm  = entry[5][0].match(/^([^/(]*).*$/)[1].trim();
+        entryNameDiv.href = `https://www.genecards.org/Search/Keyword?queryString=${encodeURIComponent(entryNameTerm)}`;
+        entryNameDiv.textContent = entryNameTerm;
+        entryNameDiv.target = "_blank";
+
+
+        let aliases = allAliases[entry[5][1].match(/^([^/(]*).*$/)[1].replace(/[^\w()/]+/g, "")];
+        let entryAliasesDiv = div.appendChild(document.createElement("span"));
+        if (!aliases) continue;
+        entryAliasesDiv.textContent = [aliases[1], ...aliases[2]]
+            .map(alias => `, ${alias.trim()}`)
+            .join("");
+    }
+    if (uniqueTargets.length > 1000) {
+        let div = aliasesDiv.appendChild(document.createElement("div"));
+        div.textContent = `[ + ${uniqueTargets.length - 1000} more ]`;
+    }
+
+    await updateSamplesList({genome, database: results});
+}
+
+
+
+async function showFullSample({genome, srx}={}) {
+    let data = (await getDatabase({genome}));
+    data = data.filter(x => x[2][0] === srx);
+    if (data.length !== 1) throw new Error(`${srx} found 0 or multiple times in full database.`);
+    data = data[0].map(x => x[0]);
+    data[8] = data[8] === "?" ? [] : data[8].split(",");
+    data[9] = data[9].split(";").map(x => x.split("="));
+
+    let div = document.getElementById("full-sample");
+    div.textContent = "";
+    let fieldsDiv = div.appendChild(document.createElement("div"));
+    fieldsDiv.classList.add("fields");
+    let attributesDiv = div.appendChild(document.createElement("div"));
+    attributesDiv.classList.add("attributes");
+    let logsDiv = div.appendChild(document.createElement("div"));
+    logsDiv.classList.add("logs");
+    let aliasesDiv = div.appendChild(document.createElement("div"));
+    aliasesDiv.classList.add("aliases");
+    let linksDiv = div.appendChild(document.createElement("div"));
+    linksDiv.classList.add("links");
+    let geoMoreInfoDiv = div.appendChild(document.createElement("div"));
+    geoMoreInfoDiv.classList.add("geo-more-info");
+
+    let makeKeyValueDiv = (parent) => {
+        let fieldDiv = parent.appendChild(document.createElement("div"));
+        fieldDiv.classList.add("key-value-pair");
+        let keyDiv = fieldDiv.appendChild(document.createElement("div"));
+        let valueDiv = fieldDiv.appendChild(document.createElement("div"));
+        return [keyDiv, valueDiv];
+    };
+    let [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
+    keyDiv.textContent = "GSE";
+    valueDiv.textContent = data[0];
+    [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
+    keyDiv.textContent = "GSM";
+    valueDiv.textContent = data[1];
+    [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
+    keyDiv.textContent = "SRX";
+    valueDiv.textContent = data[2];
+    [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
+    keyDiv.textContent = "Sample";
+    valueDiv.textContent = data[5];
+    [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
+    keyDiv.textContent = "Genome";
+    valueDiv.textContent = data[3];
+    [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
+    keyDiv.textContent = "Cell";
+    valueDiv.textContent = data[4];
+    [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
+    keyDiv.textContent = "Date";
+    valueDiv.textContent = data[6];
+    [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
+    keyDiv.textContent = "Title";
+    valueDiv.textContent = data[7];
+
+    [keyDiv, valueDiv] = makeKeyValueDiv(attributesDiv);
+    keyDiv.textContent = "Attributes";
+    for (let [key, value] of data[9]) {
+        [keyDiv, valueDiv] = makeKeyValueDiv(attributesDiv);
+        keyDiv.textContent = key
+            .replace(/_/g, " ")
+            .replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1));
+        valueDiv.textContent = value;
+    }
+
+    [keyDiv, valueDiv] = makeKeyValueDiv(logsDiv);
+    keyDiv.textContent = "Processing Logs";
+    let logsHeader = data[5].toLowerCase() === "bisulfite-seq"
+        ? ["Sequencing", "Mapping", "Coverage", "Hyper MR"]
+        : ["Sequencing", "Mapping", "Duplicates", "Peaks"];
+    let logsSuffix = data[5].toLowerCase() === "bisulfite-seq"
+        ? [" reads", " %", " ×", " %"]
+        : [" reads", " %", " %", " below 1e-5"];
+    for (let [valueIndex, value] of data[8].entries()) {
+        [keyDiv, valueDiv] = makeKeyValueDiv(logsDiv);
+        keyDiv.textContent = logsHeader[valueIndex];
+        valueDiv.textContent = `${value}${logsSuffix[valueIndex]}`;
+    }
+
+    let minimalName = data[5].match(/^([^/(]*).*$/)[1].toLowerCase().replace(/[^\w()/]+/g, "");
+    [keyDiv, valueDiv] = makeKeyValueDiv(aliasesDiv);
+    keyDiv.textContent = "Aliases";
+    [keyDiv, valueDiv] = makeKeyValueDiv(aliasesDiv);
+    keyDiv.textContent = "Human";
+    let humanAliasesDiv = valueDiv;
+    (async () => {
+        let aliases = await getGenesAliases({genome: "hg38"});
+        aliases = aliases[minimalName];
+        aliases = aliases == null
+            ? [data[5].match(/^([^/(]*).*$/)[1]]
+            : [aliases[0], aliases[1], ...aliases[2]];
+        humanAliasesDiv.textContent = aliases.join(", ");
+    })();
+    [keyDiv, valueDiv] = makeKeyValueDiv(aliasesDiv);
+    keyDiv.textContent = "Mouse";
+    let mouseAliasesDiv = valueDiv;
+    (async () => {
+        let aliases = await getGenesAliases({genome: "mm10"});
+        aliases = aliases[minimalName];
+        aliases = aliases == null
+            ? [data[5].match(/^([^/(]*).*$/)[1]]
+            : [aliases[0], aliases[1], ...aliases[2]];
+        mouseAliasesDiv.textContent = aliases.join(", ");
+    })();
+
+    [keyDiv, valueDiv] = makeKeyValueDiv(linksDiv);
+    keyDiv.textContent = "Links";
+    [keyDiv, valueDiv] = makeKeyValueDiv(linksDiv);
+    keyDiv.textContent = "Source";
+    let sourceDiv = valueDiv;
+    let chipAtlasDiv = sourceDiv.appendChild(document.createElement("a"));
+    chipAtlasDiv.href = `https://chip-atlas.org/view?id=${srx}`;
+    chipAtlasDiv.textContent = "ChIP-Atlas";
+    chipAtlasDiv.target = "_blank";
+    if (data[1] !== "?") {
+        let geoDiv = sourceDiv.appendChild(document.createElement("a"));
+        geoDiv.href = `https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=${data[1]}`;
+        geoDiv.textContent = "GEO";
+        geoDiv.target = "_blank";
+    }
+    let sraDiv = sourceDiv.appendChild(document.createElement("a"));
+    sraDiv.href = `https://www.ncbi.nlm.nih.gov/sra/?term=${srx}`;
+    sraDiv.textContent = "SRA";
+    sraDiv.target = "_blank";
+    let enaDiv = sourceDiv.appendChild(document.createElement("a"));
+    enaDiv.href = `https://www.ebi.ac.uk/ena/browser/view/${srx}`;
+    enaDiv.textContent = "ENA";
+    enaDiv.target = "_blank";
+
+    [keyDiv, valueDiv] = makeKeyValueDiv(linksDiv);
+    keyDiv.textContent = "Fastq";
+    let fastqDiv = valueDiv;
+    setTimeout(async () => {
+        let url = `https://www.ebi.ac.uk/ena/portal/api/filereport?accession=${srx}&result=read_run&fields=run_accession,fastq_ftp,fastq_bytes`;
+        let response = await fetch(url);
+        if (!response.ok) return;
+        response = await response.text();
+        let lines = response.trim().split("\n");
+        if (lines.length < 2) return;
+        for (let line of lines.slice(1)) {
+            let paths = line.split("\t")[1].split(";");
+            let sizes = line.split("\t")[2].split(";");
+            if (paths.length !== sizes.length) continue;
+            if ((paths.length !== 1 && paths.length !== 2) || paths[0].length === 0) continue;
+            for (let i = 0; i < paths.length; i++) {
+                let link = fastqDiv.appendChild(document.createElement("a"));
+                link.href = `https://${paths[i]}`;
+                link.textContent = paths.length === 1 ? "Single-end" : `R${i + 1}`;
+                let size = Number(sizes[i]);
+                let sizeGB = (size / (1024 * 1024 * 1024)).toFixed(2);
+                link.textContent += ` (${sizeGB} GB)`;
+                link.classList.add("appear-smoothly");
+            }
+        }
+    }, 0);
+    
+    [keyDiv, valueDiv] = makeKeyValueDiv(linksDiv);
+    keyDiv.textContent = "Processed";
+    let processedDiv = valueDiv;
+    let peaksDiv = processedDiv.appendChild(document.createElement("a"));
+    peaksDiv.href = `https://chip-atlas.dbcls.jp/data/${data[3]}/eachData/bed05/${srx}.05.bed`;
+    peaksDiv.textContent = "Peaks";
+    let bigwigDiv = processedDiv.appendChild(document.createElement("a"));
+    let bigwigNameDiv = bigwigDiv.appendChild(document.createElement("span"));
+    let bigwigSizeDiv = bigwigDiv.appendChild(document.createElement("span"));
+    bigwigDiv.href = `https://chip-atlas.dbcls.jp/data/${data[3]}/eachData/bw/${srx}.bw`;
+    bigwigNameDiv.textContent = "Bigwig";
+    setTimeout(async () => {
+        let response = await fetch(bigwigDiv.href, {method: "HEAD"});
+        if (!response.ok) return;
+        let size = Number(response.headers.get("Content-Length"));
+        let sizeMB = (size / (1024 * 1024)).toFixed(2);
+        bigwigSizeDiv.textContent = ` (${sizeMB} MB)`;
+        bigwigSizeDiv.classList.add("appear-smoothly");
+    }, 0);
+
+    [keyDiv, valueDiv] = makeKeyValueDiv(linksDiv);
+    keyDiv.textContent = "GeneCards";
+    let genecardsDiv = valueDiv.appendChild(document.createElement("a"));
+    let genecardsTerm  = data[5].match(/^([^/(]*).*$/)[1];
+    genecardsDiv.href = `https://www.genecards.org/Search/Keyword?queryString=${encodeURIComponent(genecardsTerm)}`;
+    genecardsDiv.textContent = genecardsTerm;
+    genecardsDiv.target = "_blank";
+
+    [keyDiv, valueDiv] = makeKeyValueDiv(geoMoreInfoDiv);
+    keyDiv.textContent = "GEO Submission";
+    if (data[1] === "?") {
+        valueDiv.textContent = "Not available";
+    } else {
+        let showGeoInfoDiv = valueDiv.appendChild(document.createElement("a"));
+        showGeoInfoDiv.textContent = "Show";
+        let showGeoInfo = async () => {
+            showGeoInfoDiv.textContent = "Hide";
+            showGeoInfoDiv.onclick = () => {
+                showGeoInfoDiv.textContent = "Show";
+                showGeoInfoDiv.onclick = showGeoInfo;
+                Array.from(geoMoreInfoDiv.querySelectorAll(".key-value-pair"))
+                    .slice(1)
+                    .forEach(x => x.remove());
+            };
+            let gsmInfo = await getGSMInfo({gsm: data[1]});
+            for (let [infoKey, infoValue] of gsmInfo) {
+                let [keyDiv, valueDiv] = makeKeyValueDiv(geoMoreInfoDiv);
+                infoKey = infoKey.replace(/_/g, " ");
+                if (infoKey.startsWith("sample") && infoKey !== "sample") infoKey = infoKey.slice(6).trim();
+                infoKey = infoKey.replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1));
+                keyDiv.textContent = infoKey;
+                infoValue = infoValue.replace(/\s+/g, " ").trim();
+                valueDiv.textContent = infoValue;
+            }
+        }
+        showGeoInfoDiv.onclick = showGeoInfo;
+    }
+    
+}
+
+async function setGenome({genome}={}) {
+    let genomeControl = document.querySelector("#genome-control");
+    let genomeChoice = genomeControl.querySelector("#genome");
+    let genomeChoices = genomeControl.querySelectorAll("a");
+    let allGenomes = await getDatabaseGenomes();
+    if (!allGenomes.includes(genome)) return;
+    genomeChoices.forEach(a => a.remove());
+    for (let choice of allGenomes) {
+        if (choice === genome) continue;
+        let a = genomeControl.appendChild(document.createElement("a"));
+        a.textContent = choice;
+        a.onclick = async () => { await setGenome({genome: choice}) };
+    }
+    if (genome === genomeChoice.textContent) return;
+    genomeChoice.textContent = genome;
+    await searchSamples();
+}
+
+
+async function getGSMInfo({gsm}={}) {
+    let url = `https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=${gsm}&targ=self&form=text`;
+    let response = await fetch(url);
+    if (!response.ok) throw new Error(response);
+    let data = await response.text();
+    data = data.trim().split("\n")
+        .map(line => line.slice(1).split("=").map(x => x.trim()))
+        .map(pair => [pair[0].toLowerCase(), pair[1] || ""]);
+    return data;
+}
+
+
+
+async function main() {
+    await setGenome({genome: document.querySelector("#genome").textContent});
+    await searchSamples();
+    setTimeout(async () => {
+        await getGenesAliases({genome: document.querySelector("#genome").textContent});
+        await getGenesAliases({genome: "mm10"});
+        await getGenesAliases({genome: "hg38"});
+    }, 0);
+}
+
+main();
+
+
+
+
+        </script>
+    </body>
+</html>
