@@ -21,6 +21,8 @@
             :root {
                 --font-family: "Roboto", system-ui, sans-serif;
                 --font-family-mono: "Roboto Mono", ui-monospace, monospace;
+                --accent-color: oklch(60% 0.118 184.704);
+                --desaturated-color: oklch(70.7% 0.022 261.325);
             }
 
             main {
@@ -29,7 +31,7 @@
             }
 
             a {
-                color: oklch(60% 0.118 184.704);
+                color: var(--accent-color);
                 text-decoration: none;
                 cursor: pointer;
             }
@@ -66,7 +68,7 @@
                 display: contents;
             }
             #samples-list > div:not(:nth-child(1)):hover {
-                color: oklch(60% 0.118 184.704);
+                color: var(--accent-color);
             }
             #samples-list > div:nth-child(1) {
                 font-weight: bold;
@@ -83,7 +85,7 @@
             }
             #samples-list > div:not(div:nth-child(1)) > div > div:nth-child(2) {
                 font-size: 10px;
-                color: oklch(70.7% 0.022 261.325);
+                color: var(--desaturated-color);
             }
             #samples-list > div:nth-child(1) > div,
             #samples-list > div > div:nth-child(1) {
@@ -125,6 +127,26 @@
                 column-gap: 10px;
             }
 
+            #search-fields-control > div:not(:nth-child(1)) {
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+            }
+            #search-fields-control > div:not(:nth-child(1)):hover {
+                color: var(--accent-color);
+            }
+            #search-fields-control > div:not(:nth-child(1))::before {
+                color: var(--accent-color);
+                font-size: 80%;
+                padding-right: 3px;
+            }
+            #search-fields-control > div:not(:nth-child(1))[data-checked="true"]::before {
+                content: "● ";
+            }
+            #search-fields-control > div:not(:nth-child(1)):not([data-checked="true"])::before {
+                content: "○ ";
+            }
+
             #search-control {
                 display: grid;
                 grid-template-columns: max-content auto max-content;
@@ -135,7 +157,7 @@
 
             #search-control:hover,
             #search-control:focus-within {
-                border-bottom: 1px solid oklch(60% 0.118 184.704);
+                border-bottom: 1px solid var(--accent-color);
             }
 
             #search-control #search {
@@ -197,13 +219,22 @@
                     <div id="controls">
                         <div>
                             <div>Database:</div>
-                            <a onclick="databaseControl('toggle-full')" id="toggle-full">Use full</a>
                             <a onclick="databaseControl('clear-cache')">Clear cache</a>
                             <a onclick="alert('Not implemented yet.')">Update server</a>
                         </div>
                         <div id="genome-control"">
                             <div>Genome:</div>
                             <span id="genome">mm10</span>
+                        </div>
+                        <div id="search-fields-control">
+                            <div>Search in:</div>
+                            <div data-checked="true" data-indexes="0,1,2">IDs</span></div>
+                            <div data-checked="true" data-indexes="5">Target</div>
+                            <div data-checked="true" data-indexes="10">Aliases</div>
+                            <div data-checked="true" data-indexes="4">Cell</div>
+                            <div data-indexes="6">Date</div>
+                            <div data-indexes="7">Title</div>
+                            <div data-indexes="9">Attributes</div>
                         </div>
                         <div id="search-control">
                             <div>Search:</div>
@@ -223,7 +254,6 @@
 "use strict";
 
 let STATE = {
-    useFullDatabase: false,
     database: {},
     databaseGenomes: null,
     genesAliases: {},
@@ -303,11 +333,7 @@ async function clearCache() {
 
 
 async function databaseControl(key) {
-    if (key === "toggle-full") {
-        STATE.useFullDatabase = !STATE.useFullDatabase;
-        document.getElementById("toggle-full").textContent = STATE.useFullDatabase ? "Use minimal" : "Use full";
-        await searchSamples();
-    } else if (key === "clear-state") {
+    if (key === "clear-state") {
         STATE.database = {};
         STATE.databaseGenomes = null;
         STATE.genesAliases = {};
@@ -377,7 +403,7 @@ async function getDatabase({genome, cache="read_write"}={}) {
         .trimEnd().split("\n")
         .map(line => line.split("\t"))
         .map(line => [...line, ""])
-        .map(line => line.map(entry => [entry, entry.toLowerCase().replace(/[^\w()/]+/g, "")]));
+        .map(line => line.map(entry => [entry, entry.toLowerCase().replace(/[^\w()]+/g, "")]));
     STATE.database[genome] = data;
     return data;
 }
@@ -427,17 +453,17 @@ async function getGenesAliases({genome, cache="read_write"}={}) {
         }
     }
     data = JSON.parse(data);
-    data = Object.fromEntries(data.map(entry => [entry[0].toLowerCase().replace(/[^\w()/]+/g, ""), entry]));
+    data = Object.fromEntries(data.map(entry => [entry[0].toLowerCase().replace(/[^\w()]+/g, ""), entry]));
     STATE.genesAliases[genome] = data;
     if (!STATE.genesAliasesInserted[genome]) {
         STATE.genesAliasesInserted[genome] = true;
         let database = await getDatabase({genome});
         for (let entry of database) {
-            let minimalName = entry[5][1].match(/^([^/(]*).*$/)[1];
+            let minimalName = entry[5][1].match(/^([^(]*).*$/)[1];
             let aliases = data[minimalName];
             if (!aliases) continue;
             aliases = [aliases[1], ...aliases[2]]
-                .map(alias => alias.toLowerCase().replace(/[^\w()/]+/g, ""));
+                .map(alias => alias.toLowerCase().replace(/[^\w()]+/g, ""));
             entry[10][1] = (entry[10][1] ? entry[10][1] + " " : "") + aliases.join(" ");            
         }
     }
@@ -450,7 +476,7 @@ async function updateSamplesList({genome, database}={}) {
     samplesDiv.textContent = "";
 
     let rowDiv = samplesDiv.appendChild(document.createElement("div"));
-    for (let [title, sortIndex] of [["Date", 6], ["IDs", 0], ["Sample", 5], ["Cell", 4]]) {
+    for (let [title, sortIndex] of [["Date", 6], ["IDs", 0], ["Target", 5], ["Cell", 4]]) {
         let div = rowDiv.appendChild(document.createElement("div"));
         let titleDiv = div.appendChild(document.createElement("div"));
         div.appendChild(document.createElement("div"));
@@ -522,10 +548,10 @@ async function searchSamples() {
     let genome = document.querySelector("#genome").textContent;
     let database = await getDatabase({genome});
     let queryString = document.querySelector("#search").textContent;
-    let searchFieldsIndexes = STATE.useFullDatabase
-        ? [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10]
-        : [0, 1, 2, 3, 4, 5, 6, 10];
-
+    let searchFieldsIndexes = Array.from(document.querySelectorAll("#search-fields-control > div[data-checked='true']"))
+        .map(div => div.dataset.indexes.split(",").map(Number))
+        .flat();
+    
     // Parse query string into a tree structure
     let parseQuery = (str) => {
         str = str.trim();
@@ -552,7 +578,7 @@ async function searchSamples() {
         // Single term (no parentheses or operator)
         let normalized = str
             .toLowerCase()
-            .replace(/[^\w()/]+/g, "");
+            .replace(/[^\w()]+/g, "");
         
         // Handle pol1-9 to roman numerals - create OR with both versions
         if (normalized.match(/^pol([ivx\d]+)$/)) {
@@ -666,16 +692,16 @@ async function searchSamples() {
     for (let entry of uniqueTargets.slice(0, 1000)) {
         let div = aliasesDiv.appendChild(document.createElement("div"));
         //let entryNameDiv = div.appendChild(document.createElement("a"));
-        //entryNameDiv.textContent = entry[5][0].match(/^([^/(]*).*$/)[1];
+        //entryNameDiv.textContent = entry[5][0].match(/^([^(]*).*$/)[1];
 
         let entryNameDiv = div.appendChild(document.createElement("a"));
-        let entryNameTerm  = entry[5][0].match(/^([^/(]*).*$/)[1].trim();
+        let entryNameTerm  = entry[5][0].match(/^([^(]*).*$/)[1].trim();
         entryNameDiv.href = `https://www.genecards.org/Search/Keyword?queryString=${encodeURIComponent(entryNameTerm)}`;
         entryNameDiv.textContent = entryNameTerm;
         entryNameDiv.target = "_blank";
 
 
-        let aliases = allAliases[entry[5][1].match(/^([^/(]*).*$/)[1].replace(/[^\w()/]+/g, "")];
+        let aliases = allAliases[entry[5][1].match(/^([^(]*).*$/)[1].replace(/[^\w()]+/g, "")];
         let entryAliasesDiv = div.appendChild(document.createElement("span"));
         if (!aliases) continue;
         entryAliasesDiv.textContent = [aliases[1], ...aliases[2]]
@@ -771,7 +797,7 @@ async function showFullSample({genome, srx}={}) {
         valueDiv.textContent = `${value}${logsSuffix[valueIndex]}`;
     }
 
-    let minimalName = data[5].match(/^([^/(]*).*$/)[1].toLowerCase().replace(/[^\w()/]+/g, "");
+    let minimalName = data[5].match(/^([^(]*).*$/)[1].toLowerCase().replace(/[^\w()]+/g, "");
     [keyDiv, valueDiv] = makeKeyValueDiv(aliasesDiv);
     keyDiv.textContent = "Aliases";
     [keyDiv, valueDiv] = makeKeyValueDiv(aliasesDiv);
@@ -781,7 +807,7 @@ async function showFullSample({genome, srx}={}) {
         let aliases = await getGenesAliases({genome: "hg38"});
         aliases = aliases[minimalName];
         aliases = aliases == null
-            ? [data[5].match(/^([^/(]*).*$/)[1]]
+            ? [data[5].match(/^([^(]*).*$/)[1]]
             : [aliases[0], aliases[1], ...aliases[2]];
         humanAliasesDiv.textContent = aliases.join(", ");
     })();
@@ -792,7 +818,7 @@ async function showFullSample({genome, srx}={}) {
         let aliases = await getGenesAliases({genome: "mm10"});
         aliases = aliases[minimalName];
         aliases = aliases == null
-            ? [data[5].match(/^([^/(]*).*$/)[1]]
+            ? [data[5].match(/^([^(]*).*$/)[1]]
             : [aliases[0], aliases[1], ...aliases[2]];
         mouseAliasesDiv.textContent = aliases.join(", ");
     })();
@@ -871,7 +897,7 @@ async function showFullSample({genome, srx}={}) {
     [keyDiv, valueDiv] = makeKeyValueDiv(linksDiv);
     keyDiv.textContent = "GeneCards";
     let genecardsDiv = valueDiv.appendChild(document.createElement("a"));
-    let genecardsTerm  = data[5].match(/^([^/(]*).*$/)[1];
+    let genecardsTerm  = data[5].match(/^([^(]*).*$/)[1];
     genecardsDiv.href = `https://www.genecards.org/Search/Keyword?queryString=${encodeURIComponent(genecardsTerm)}`;
     genecardsDiv.textContent = genecardsTerm;
     genecardsDiv.target = "_blank";
@@ -941,6 +967,17 @@ async function getGSMInfo({gsm}={}) {
 
 
 async function main() {
+    for (let div of document.querySelectorAll("#search-fields-control > div:not(:nth-child(1))")) {
+        div.onclick = async () => {
+            if (div.dataset.checked === "true") {
+                div.dataset.checked = "false";
+            } else {
+                div.dataset.checked = "true";
+            }
+            await searchSamples();
+        };
+    }
+
     await setGenome({genome: document.querySelector("#genome").textContent});
     await searchSamples();
     setTimeout(async () => {
