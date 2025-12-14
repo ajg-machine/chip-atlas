@@ -182,15 +182,13 @@
                 overflow-y: auto;
             }
 
-            #full-sample .fields,
-            #full-sample .logs,
-            #full-sample .attributes,
-            #full-sample .aliases,
-            #full-sample .links,
-            #full-sample .geo-more-info {
+            #full-sample .section {
                 display: flex;
                 flex-direction: column;
                 gap: 5px;
+            }
+            #full-sample .section:empty {
+                display: none;
             }
 
             #full-sample .key-value-pair > div:first-child {
@@ -730,20 +728,25 @@ async function showFullSample({genome, srx}={}) {
     let div = document.getElementById("full-sample");
     div.textContent = "";
     let fieldsDiv = div.appendChild(document.createElement("div"));
-    fieldsDiv.classList.add("fields");
+    fieldsDiv.classList.add("section", "fields");
     let attributesDiv = div.appendChild(document.createElement("div"));
-    attributesDiv.classList.add("attributes");
+    attributesDiv.classList.add("section", "attributes");
     let logsDiv = div.appendChild(document.createElement("div"));
-    logsDiv.classList.add("logs");
+    logsDiv.classList.add("section", "logs");
     let aliasesDiv = div.appendChild(document.createElement("div"));
-    aliasesDiv.classList.add("aliases");
+    aliasesDiv.classList.add("section", "aliases");
     let linksDiv = div.appendChild(document.createElement("div"));
-    linksDiv.classList.add("links");
-    let geoMoreInfoDiv = div.appendChild(document.createElement("div"));
-    geoMoreInfoDiv.classList.add("geo-more-info");
+    linksDiv.classList.add("section", "links");
+    let moreInfoHeaderDiv = div.appendChild(document.createElement("div"));
+    moreInfoHeaderDiv.classList.add("section", "more-info-header");
+    let moreInfoDiv = div.appendChild(document.createElement("div"));
+    moreInfoDiv.classList.add("section", "more-info");
 
-    let makeKeyValueDiv = (parent) => {
+    let makeKeyValueDiv = (parent, {fieldClasses=[]}={}) => {
         let fieldDiv = parent.appendChild(document.createElement("div"));
+        for (let fieldClass of fieldClasses) {
+            fieldDiv.classList.add(fieldClass);
+        }
         fieldDiv.classList.add("key-value-pair");
         let keyDiv = fieldDiv.appendChild(document.createElement("div"));
         let valueDiv = fieldDiv.appendChild(document.createElement("div"));
@@ -903,25 +906,31 @@ async function showFullSample({genome, srx}={}) {
     genecardsDiv.textContent = genecardsTerm;
     genecardsDiv.target = "_blank";
 
-    [keyDiv, valueDiv] = makeKeyValueDiv(geoMoreInfoDiv);
+    let toggleMoreInfo = async (div, openFunction) => {
+        let divOpened = div.dataset.opened === "true";
+        moreInfoDiv.textContent = "";
+        moreInfoHeaderDiv.querySelectorAll("a").forEach(a => {
+            a.textContent = "Show";
+            a.dataset.opened = "false";
+        });
+        if (!divOpened) {
+            div.textContent = "Hide";
+            div.dataset.opened = "true";
+            await openFunction();
+        }
+    };
+
+    [keyDiv, valueDiv] = makeKeyValueDiv(moreInfoHeaderDiv);
     keyDiv.textContent = "GEO Submission";
     if (data[1] === "?") {
         valueDiv.textContent = "Not available";
     } else {
-        let showGeoInfoDiv = valueDiv.appendChild(document.createElement("a"));
-        showGeoInfoDiv.textContent = "Show";
-        let showGeoInfo = async () => {
-            showGeoInfoDiv.textContent = "Hide";
-            showGeoInfoDiv.onclick = () => {
-                showGeoInfoDiv.textContent = "Show";
-                showGeoInfoDiv.onclick = showGeoInfo;
-                Array.from(geoMoreInfoDiv.querySelectorAll(".key-value-pair"))
-                    .slice(1)
-                    .forEach(x => x.remove());
-            };
+        let showInfoDiv = valueDiv.appendChild(document.createElement("a"));
+        showInfoDiv.textContent = "Show";
+        let showInfo = async () => {
             let gsmInfo = await getGSMInfo({gsm: data[1]});
             for (let [infoKey, infoValue] of gsmInfo) {
-                let [keyDiv, valueDiv] = makeKeyValueDiv(geoMoreInfoDiv);
+                let [keyDiv, valueDiv] = makeKeyValueDiv(moreInfoDiv);
                 infoKey = infoKey.replace(/_/g, " ");
                 if (infoKey.startsWith("sample") && infoKey !== "sample") infoKey = infoKey.slice(6).trim();
                 infoKey = infoKey.replace(/\w\S*/g, w => w.charAt(0).toUpperCase() + w.slice(1));
@@ -930,9 +939,54 @@ async function showFullSample({genome, srx}={}) {
                 valueDiv.textContent = infoValue;
             }
         }
-        showGeoInfoDiv.onclick = showGeoInfo;
+        showInfoDiv.onclick = () => toggleMoreInfo(showInfoDiv, showInfo);
+    }
+
+    [keyDiv, valueDiv] = makeKeyValueDiv(moreInfoHeaderDiv);
+    keyDiv.textContent = "NCBI gene info";
+    {
+        let showInfoDiv = valueDiv.appendChild(document.createElement("a"));
+        showInfoDiv.textContent = "Show";
+        let showInfo = async () => {
+            let term = data[5].match(/^([^(]*).*$/)[1];
+            let genome = document.querySelector("#genome").textContent;
+            let taxon = STATE.databaseGenomes[genome].taxon_id;
+            let url = `https://api.ncbi.nlm.nih.gov/datasets/v2/gene/symbol/${term}/taxon/${taxon}/dataset_report`;
+            let response = await fetch(url);
+            if (!response.ok) throw new Error(response);
+            let responseData = await response.json();
+            if (responseData.reports == null) return;
+            responseData = responseData.reports[0].gene;
+            let [itemKeyDiv, itemValueDiv] = makeKeyValueDiv(moreInfoDiv);
+            itemKeyDiv.textContent = "Gene ID";
+            itemValueDiv.textContent = responseData.gene_id;
+            [itemKeyDiv, itemValueDiv] = makeKeyValueDiv(moreInfoDiv);
+            itemKeyDiv.textContent = "Symbol";
+            itemValueDiv.textContent = responseData.symbol;
+            [itemKeyDiv, itemValueDiv] = makeKeyValueDiv(moreInfoDiv);
+            itemKeyDiv.textContent = "Synonyms";
+            itemValueDiv.textContent = responseData.synonyms.join(", ");
+            [itemKeyDiv, itemValueDiv] = makeKeyValueDiv(moreInfoDiv);
+            itemKeyDiv.textContent = "Description";
+            itemValueDiv.textContent = responseData.description;
+            [itemKeyDiv, itemValueDiv] = makeKeyValueDiv(moreInfoDiv);
+            itemKeyDiv.textContent = "Summary";
+            itemValueDiv.textContent = responseData.summary.map(x => x.description).join(" | ");
+            [itemKeyDiv, itemValueDiv] = makeKeyValueDiv(moreInfoDiv);
+            itemKeyDiv.textContent = "Molecular functions";
+            itemValueDiv.textContent = uniquesInArray(responseData.gene_ontology.molecular_functions.map(x => `${x.qualifier} ${x.name}`)).join(", ");
+            [itemKeyDiv, itemValueDiv] = makeKeyValueDiv(moreInfoDiv);
+            itemKeyDiv.textContent = "Biological processes";
+            itemValueDiv.textContent = uniquesInArray(responseData.gene_ontology.biological_processes.map(x => `${x.qualifier} ${x.name}`)).join(", ");
+            [itemKeyDiv, itemValueDiv] = makeKeyValueDiv(moreInfoDiv);
+            itemKeyDiv.textContent = "Cellular components";
+            itemValueDiv.textContent = uniquesInArray(responseData.gene_ontology.cellular_components.map(x => `${x.qualifier} ${x.name}`)).join(", ");
+        }
+        showInfoDiv.onclick = () => toggleMoreInfo(showInfoDiv, showInfo);
     }
     
+
+
 }
 
 async function setGenome({genome}={}) {
@@ -963,6 +1017,19 @@ async function getGSMInfo({gsm}={}) {
         .map(line => line.slice(1).split("=").map(x => x.trim()))
         .map(pair => [pair[0].toLowerCase(), pair[1] || ""]);
     return data;
+}
+
+
+function uniquesInArray(array) {
+    let seen = new Set();
+    let uniqueArray = [];
+    for (let item of array) {
+        if (!seen.has(item)) {
+            seen.add(item);
+            uniqueArray.push(item);
+        }
+    }
+    return uniqueArray;
 }
 
 
