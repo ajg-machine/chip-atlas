@@ -254,6 +254,7 @@
 "use strict";
 
 let STATE = {
+    version: "2025-12-13",
     database: {},
     databaseGenomes: null,
     genesAliases: {},
@@ -939,9 +940,9 @@ async function setGenome({genome}={}) {
     let genomeChoice = genomeControl.querySelector("#genome");
     let genomeChoices = genomeControl.querySelectorAll("a");
     let allGenomes = await getDatabaseGenomes();
-    if (!allGenomes.includes(genome)) return;
+    if (allGenomes[genome] == null) return;
     genomeChoices.forEach(a => a.remove());
-    for (let choice of allGenomes) {
+    for (let choice of Object.keys(allGenomes).toSorted()) {
         if (choice === genome) continue;
         let a = genomeControl.appendChild(document.createElement("a"));
         a.textContent = choice;
@@ -967,6 +968,12 @@ async function getGSMInfo({gsm}={}) {
 
 
 async function main() {
+
+    if (await readCache("version") != STATE.version) {
+        await databaseControl("clear-cache");
+        await writeCache("version", STATE.version);
+    }
+
     for (let div of document.querySelectorAll("#search-fields-control > div:not(:nth-child(1))")) {
         div.onclick = async () => {
             if (div.dataset.checked === "true") {
@@ -985,6 +992,7 @@ async function main() {
         await getGenesAliases({genome: "mm10"});
         await getGenesAliases({genome: "hg38"});
     }, 0);
+
 }
 
 main();
