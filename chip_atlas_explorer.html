@@ -252,110 +252,12 @@
 "use strict";
 
 let STATE = {
-    version: "2025-12-13",
     database: {},
     databaseGenomes: null,
     genesAliases: {},
     genesAliasesInserted: {},
     sort: {by: 6, reverse: true},
 };
-
-
-async function readCache(key) {
-    return new Promise((resolve, reject) => {
-        let request = indexedDB.open("chip-atlas-cache", 1);
-        request.onupgradeneeded = (e) => {
-            let db = e.target.result;
-            if (!db.objectStoreNames.contains("cache")) {
-                db.createObjectStore("cache");
-            }
-        };
-        request.onsuccess = async (e) => {
-            let db = e.target.result;
-            let transaction = db.transaction("cache", "readonly");
-            let store = transaction.objectStore("cache");
-            let getRequest = store.get(key);
-            getRequest.onsuccess = async () => {
-                if (!getRequest.result) {
-                    resolve(null);
-                    return;
-                }
-                let decompressionStream = new DecompressionStream("gzip");
-                let decompressedStream = new Blob([getRequest.result]).stream().pipeThrough(decompressionStream);
-                let data = await new Response(decompressedStream).text();
-                resolve(data);
-            };
-            getRequest.onerror = () => reject(getRequest.error);
-        };
-        request.onerror = () => reject(request.error);
-    });
-}
-
-async function writeCache(key, data) {
-    let compressionStream = new CompressionStream("gzip");
-    let compressedStream = new Blob([data]).stream().pipeThrough(compressionStream);
-    let compressedData = new Uint8Array(await new Response(compressedStream).arrayBuffer());
-    
-    return new Promise((resolve, reject) => {
-        let request = indexedDB.open("chip-atlas-cache", 1);
-        request.onupgradeneeded = (e) => {
-            let db = e.target.result;
-            if (!db.objectStoreNames.contains("cache")) {
-                db.createObjectStore("cache");
-            }
-        };
-        request.onsuccess = (e) => {
-            let db = e.target.result;
-            let transaction = db.transaction("cache", "readwrite");
-            let store = transaction.objectStore("cache");
-            let putRequest = store.put(compressedData, key);
-            putRequest.onsuccess = () => resolve();
-            putRequest.onerror = () => {
-                console.error("Failed to write cache to IndexedDB:", putRequest.error);
-                resolve(); // Don't reject, just log
-            };
-        };
-        request.onerror = () => {
-            console.error("Failed to open IndexedDB:", request.error);
-            resolve(); // Don't reject, just log
-        };
-    });
-}
-
-async function clearCache() {
-    // Prefer using indexedDB.databases() when available to check existence without creating a DB
-    if (indexedDB.databases) {
-        try {
-            let dbs = await indexedDB.databases();
-            if (!dbs.some(db => db.name === "chip-atlas-cache")) return;
-        } catch (e) {
-            // ignore and fall back to open-check below
-        }
-    } else {
-        // Fallback: try opening the DB; if onupgradeneeded fires the DB did not exist previously
-        let created = false;
-        await new Promise((resolve) => {
-            let req = indexedDB.open("chip-atlas-cache");
-            req.onupgradeneeded = (e) => {
-                created = true;
-                e.target.result.close();
-                resolve();
-            };
-            req.onsuccess = (e) => {
-                e.target.result.close();
-                resolve();
-            };
-            req.onerror = () => resolve();
-        });
-        if (created) return;
-    }
-
-    return new Promise((resolve, reject) => {
-        let request = indexedDB.deleteDatabase("chip-atlas-cache");
-        request.onsuccess = () => resolve();
-        request.onerror = () => reject(request.error);
-    });
-}
 
 
 async function databaseControl(key) {
@@ -367,12 +269,11 @@ async function databaseControl(key) {
         STATE.sort = {by: null, reverse: false};
     } else if (key === "clear-cache") {
         await databaseControl("clear-state");
-        await clearCache();
-        await getDatabaseGenomes({cache: "write"});
-        await getDatabase({genome: document.querySelector("#genome").textContent, cache: "write"});
-        await getGenesAliases({genome: document.querySelector("#genome").textContent, cache: "write"});
-        await getGenesAliases({genome: "mm10", cache: "write"});
-        await getGenesAliases({genome: "hg38", cache: "write"});
+        await getDatabaseGenomes();
+        await getDatabase({genome: document.querySelector("#genome").textContent});
+        await getGenesAliases({genome: document.querySelector("#genome").textContent});
+        await getGenesAliases({genome: "mm10"});
+        await getGenesAliases({genome: "hg38"});
         await searchSamples();
     } else if (key === "update-database") {
         throw new Error(`Not implemented`);
@@ -382,49 +283,31 @@ async function databaseControl(key) {
 }
 
 
-async function getDatabaseGenomes({cache="read_write"}={}) {
+async function getDatabaseGenomes() {
     if (STATE.databaseGenomes) return STATE.databaseGenomes;
-    let data;
-    let cached = await readCache(`database-genomes`);
-    if (cached && cache.includes("read")) {
-        data = JSON.parse(cached);
-    } else {
-        //let response = await fetch("/data-server/v2/chip-atlas/get-database-genomes");
-        let url = "https://raw.githubusercontent.com/ajg-machine/chip-atlas/main/database/genomes.json";
-        let response = await fetch(url);
-        if (!response.ok) throw new Error(response);
-        data = await response.json();
-        if (cache.includes("write")) {
-            await writeCache(`database-genomes`, JSON.stringify(data));
-        }
-    }
+    //let response = await fetch("/data-server/v2/chip-atlas/get-database-genomes");
+    let url = "https://raw.githubusercontent.com/ajg-machine/chip-atlas/main/database/genomes.json";
+    let response = await fetch(url);
+    if (!response.ok) throw new Error(response);
+    let data = await response.json();
     STATE.databaseGenomes = data;
     return data;
 }
 
 
-async function getDatabase({genome, cache="read_write"}={}) {
+async function getDatabase({genome}={}) {
     genome = genome.toLowerCase();
     if (STATE.database[genome]) return STATE.database[genome];
-    let data;
-    let cached = await readCache(`full-database-${genome}`);
-    if (cached && cache.includes("read")) {
-        data = cached;
-    } else {
-        //let response = await fetch(`/data-server/v2/chip-atlas/get-database?genome=${genome}&full=${full}`);
-        //if (!response.ok) throw new Error(response);
-        //data = await response.text();
-        let file = `${genome}.full.tsv.gz`;
-        let url = `https://raw.githubusercontent.com/ajg-machine/chip-atlas/main/database/genomes/${file}`;
-        let response = await fetch(url);
-        if (!response.ok) throw new Error(response);
-        let decompressionStream = new DecompressionStream("gzip");
-        let decompressedStream = response.body.pipeThrough(decompressionStream);
-        data = await new Response(decompressedStream).text();
-        if (cache.includes("write")) {
-            await writeCache(`full-database-${genome}`, data);
-        }
-    }
+    //let response = await fetch(`/data-server/v2/chip-atlas/get-database?genome=${genome}&full=${full}`);
+    //if (!response.ok) throw new Error(response);
+    //let data = await response.text();
+    let file = `${genome}.full.tsv.gz`;
+    let url = `https://raw.githubusercontent.com/ajg-machine/chip-atlas/main/database/genomes/${file}`;
+    let response = await fetch(url);
+    if (!response.ok) throw new Error(response);
+    let decompressionStream = new DecompressionStream("gzip");
+    let decompressedStream = response.body.pipeThrough(decompressionStream);
+    let data = await new Response(decompressedStream).text();
     data = data
         .trimEnd().split("\n")
         .map(line => line.split("\t"))
@@ -449,34 +332,26 @@ async function getFullSampleData({genome, srx, offset}={}) {
     return data;
 }
 
-async function getGenesAliases({genome, cache="read_write"}={}) {
+async function getGenesAliases({genome}={}) {
     if (STATE.genesAliases[genome]) return STATE.genesAliases[genome];
+    //let url = `/data-server/v2/chip-atlas/get-genes-aliases?genome=${genome}`;
+    //let response = await fetch(url);
+    //if (!response.ok) throw new Error(response);
+    //let data = await response.text();
+    let file = {
+        hg38: "hugo_genenames.aliases.json.gz",
+        mm10: "mgi_markers.aliases.json.gz",
+    }[genome];
     let data;
-    let cached = await readCache(`genes-aliases-${genome}`);
-    if (cached && cache.includes("read")) {
-        data = cached;
+    if (file) {
+        let url = `https://raw.githubusercontent.com/ajg-machine/chip-atlas/main/genes/${file}`;
+        let response = await fetch(url);
+        if (!response.ok) throw new Error(response);
+        let decompressionStream = new DecompressionStream("gzip");
+        let decompressedStream = response.body.pipeThrough(decompressionStream);
+        data = await new Response(decompressedStream).text();
     } else {
-        //let url = `/data-server/v2/chip-atlas/get-genes-aliases?genome=${genome}`;
-        //let response = await fetch(url);
-        //if (!response.ok) throw new Error(response);
-        //data = await response.text();
-        let file = {
-            hg38: "hugo_genenames.aliases.json.gz",
-            mm10: "mgi_markers.aliases.json.gz",
-        }[genome];
-        if (file) {
-            let url = `https://raw.githubusercontent.com/ajg-machine/chip-atlas/main/genes/${file}`;
-            let response = await fetch(url);
-            if (!response.ok) throw new Error(response);
-            let decompressionStream = new DecompressionStream("gzip");
-            let decompressedStream = response.body.pipeThrough(decompressionStream);
-            data = await new Response(decompressedStream).text();
-        } else {
-            data = "[]";
-        }
-        if (cache.includes("write")) {
-            await writeCache(`genes-aliases-${genome}`, data);
-        }
+        data = "[]";
     }
     data = JSON.parse(data);
     data = Object.fromEntries(data.map(entry => [entry[0].toLowerCase().replace(/[^\w()]+/g, ""), entry]));
@@ -1062,11 +937,6 @@ function uniquesInArray(array) {
 
 
 async function main() {
-
-    if (await readCache("version") != STATE.version) {
-        await databaseControl("clear-cache");
-        await writeCache("version", STATE.version);
-    }
 
     for (let div of document.querySelectorAll("#search-fields-control > div:not(:nth-child(1))")) {
         div.onclick = async () => {
