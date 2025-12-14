@@ -1,26 +1,26 @@
 {
-  "ce11": {
-    "taxon_name": "Caenorhabditis elegans",
-    "taxon_id": 6239
-  },
-  "dm6": {
-    "taxon_name": "Drosophila melanogaster",
-    "taxon_id": 7227
-  },
-  "hg38": {
-    "taxon_name": "Homo sapiens",
-    "taxon_id": 9606
-  },
-  "mm10": {
-    "taxon_name": "Mus musculus",
-    "taxon_id": 10090
-  },
-  "rn6": {
-    "taxon_name": "Rattus norvegicus",
-    "taxon_id": 10116
-  },
-  "saccer3": {
-    "taxon_name": "Saccharomyces cerevisiae",
-    "taxon_id": 4932
-  }
+    "ce11": {
+        "taxon_name": "Caenorhabditis elegans",
+        "taxon_id": 6239
+    },
+    "dm6": {
+        "taxon_name": "Drosophila melanogaster",
+        "taxon_id": 7227
+    },
+    "hg38": {
+        "taxon_name": "Homo sapiens",
+        "taxon_id": 9606
+    },
+    "mm10": {
+        "taxon_name": "Mus musculus",
+        "taxon_id": 10090
+    },
+    "rn6": {
+        "taxon_name": "Rattus norvegicus",
+        "taxon_id": 10116
+    },
+    "saccer3": {
+        "taxon_name": "Saccharomyces cerevisiae",
+        "taxon_id": 4932
+    }
 }
