@@ -311,8 +311,21 @@ async function getDatabase({genome}={}) {
     data = data
         .trimEnd().split("\n")
         .map(line => line.split("\t"))
-        .map(line => [...line, ""])
-        .map(line => line.map(entry => [entry, entry.toLowerCase().replace(/[^\w()]+/g, "")]));
+        .map(line => line.length < 11 ? line.concat(Array(11 - line.length).fill("")) : line)
+        .map(line => line.map((entry, index) => {
+            if (index === 9) {
+                entry = [entry, entry
+                    .toLowerCase()
+                    .split(";")
+                    .map(x => x.split("=").map(y => y.replace(/[^\w()]+/g, "")))
+                    .flat()
+                    .join(" ")
+                ];
+            } else {
+                entry = [entry, entry.toLowerCase().replace(/[^\w()]+/g, "")];
+            }
+            return entry;
+        }));
     STATE.database[genome] = data;
     return data;
 }
@@ -473,7 +486,7 @@ async function searchSamples() {
         // Check if multiple terms without parentheses (default to AND)
         let content = str.split(/\s+/);
         if (content.length > 1) {
-            return {type: "and", children: content.map(parseQueryList)};
+            return parseQuery(`(and: ${content.join(" ")})`);
         }
         
         // Single term (no parentheses or operator)
