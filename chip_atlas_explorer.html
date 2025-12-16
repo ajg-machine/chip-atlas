@@ -367,14 +367,31 @@ async function getGenesAliases({genome}={}) {
         data = "[]";
     }
     data = JSON.parse(data);
-    data = Object.fromEntries(data.map(entry => [entry[0].toLowerCase().replace(/[^\w()]+/g, ""), entry]));
+    data = new Map(data.map(entry => [entry[0].toLowerCase().replace(/[^\w()]+/g, ""), entry]));
+
+    let dataFromAliases = new Map();
+    for (let entry of data.values()) {
+        for (let alias of [entry[1], ...entry[2]]) {
+            let minimalName = alias.toLowerCase().replace(/[^\w()]+/g, "");
+            let aliasDataFromAliases = dataFromAliases.get(minimalName);
+            if (aliasDataFromAliases) {
+                aliasDataFromAliases.push(entry);
+            } else {
+                dataFromAliases.set(minimalName, [entry]);
+            }
+        }
+    }
+    for (let [key, value] of dataFromAliases.entries()) {
+        if (value.length === 1 && !data.has(key)) data.set(key, value[0]);
+    }
+
     STATE.genesAliases[genome] = data;
     if (!STATE.genesAliasesInserted[genome]) {
         STATE.genesAliasesInserted[genome] = true;
         let database = await getDatabase({genome});
         for (let entry of database) {
             let minimalName = entry[5][1].match(/^([^(]*).*$/)[1];
-            let aliases = data[minimalName];
+            let aliases = data.get(minimalName);
             if (!aliases) continue;
             aliases = [aliases[1], ...aliases[2]]
                 .map(alias => alias.toLowerCase().replace(/[^\w()]+/g, ""));
@@ -615,7 +632,7 @@ async function searchSamples() {
         entryNameDiv.target = "_blank";
 
 
-        let aliases = allAliases[entry[5][1].match(/^([^(]*).*$/)[1].replace(/[^\w()]+/g, "")];
+        let aliases = allAliases.get(entry[5][1].match(/^([^(]*).*$/)[1].replace(/[^\w()]+/g, ""));
         let entryAliasesDiv = div.appendChild(document.createElement("span"));
         if (!aliases) continue;
         entryAliasesDiv.textContent = [aliases[1], ...aliases[2]]
@@ -724,7 +741,7 @@ async function showFullSample({genome, srx}={}) {
     let humanAliasesDiv = valueDiv;
     (async () => {
         let aliases = await getGenesAliases({genome: "hg38"});
-        aliases = aliases[minimalName];
+        aliases = aliases.get(minimalName);
         aliases = aliases == null
             ? [data[5].match(/^([^(]*).*$/)[1]]
             : [aliases[0], aliases[1], ...aliases[2]];
@@ -735,7 +752,7 @@ async function showFullSample({genome, srx}={}) {
     let mouseAliasesDiv = valueDiv;
     (async () => {
         let aliases = await getGenesAliases({genome: "mm10"});
-        aliases = aliases[minimalName];
+        aliases = aliases.get(minimalName);
         aliases = aliases == null
             ? [data[5].match(/^([^(]*).*$/)[1]]
             : [aliases[0], aliases[1], ...aliases[2]];
