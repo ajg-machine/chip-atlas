@@ -21,7 +21,7 @@
             :root {
                 --font-family: "Roboto", system-ui, sans-serif;
                 --font-family-mono: "Roboto Mono", ui-monospace, monospace;
-                --accent-color: oklch(60% 0.118 184.704);
+                --accent-color: oklch(58.8% 0.158 241.966);
                 --desaturated-color: oklch(70.7% 0.022 261.325);
             }
 
@@ -256,8 +256,56 @@ let STATE = {
     databaseGenomes: null,
     genesAliases: {},
     genesAliasesInserted: {},
+    histonesInfo: null,
     sort: {by: 6, reverse: true},
 };
+
+
+function formatNumber(number, {notation="full", precision=null, thousands=null}={}) {
+    let suffix = "";
+    if (notation === "si") {
+        if (number !== 0) {
+            let absNumber = Math.abs(number);
+            let exponent = Math.floor(Math.log10(absNumber) / 3);
+            let scaled;
+            if (exponent >= 0) {
+                let suffixes = ["", "k", "M", "G", "T", "P", "E"];
+                let index = Math.min(exponent, suffixes.length - 1);
+                scaled = absNumber / Math.pow(1000, index);
+                suffix = ` ${suffixes[index]}`;
+            } else {
+                let suffixes = ["", "m", "μ", "n", "p"];
+                let index = Math.min(-exponent, suffixes.length - 1);
+                scaled = absNumber * Math.pow(1000, index);
+                suffix = ` ${suffixes[index]}`;
+            }
+            number = ((number < 0) ? -1 : 1) * scaled;
+        }
+    } else if (notation === "scientific" || notation === "sci") {
+        if (number !== 0) {
+            let exponent = Math.floor(Math.log10(Math.abs(number)));
+            number /= Math.pow(10, exponent);
+            suffix = `e${exponent}`;
+        }
+    } else if (notation !== "full") {
+        throw new Error(`unknown notation: ${notation}`);
+    }
+    if (precision !== null) {
+        const rounded = Math.round(Number(number) / precision) * precision;
+        const decimals = (precision >= 1) ? 0 : Math.max(0, Math.ceil(-Math.log10(precision)));
+        number = rounded.toFixed(decimals);
+    } else {
+        number = number.toString();
+    }
+    if (thousands !== null && !/[eE]/.test(number)) {
+        let neg = number.startsWith("-") ? "-" : "";
+        if (neg) number = number.slice(1);
+        let parts = number.split(".");
+        parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, thousands);
+        number = neg + parts.join(".");
+    }
+    return `${number}${suffix}`;
+}
 
 
 async function databaseControl(key) {
@@ -266,6 +314,7 @@ async function databaseControl(key) {
         STATE.databaseGenomes = null;
         STATE.genesAliases = {};
         STATE.genesAliasesInserted = {};
+        STATE.histonesInfo = null;
         STATE.sort = {by: null, reverse: false};
     } else if (key === "clear-cache") {
         await databaseControl("clear-state");
@@ -274,12 +323,28 @@ async function databaseControl(key) {
         await getGenesAliases({genome: document.querySelector("#genome").textContent});
         await getGenesAliases({genome: "mm10"});
         await getGenesAliases({genome: "hg38"});
+        await getHistonesInfo();
         await searchSamples();
     } else if (key === "update-database") {
         throw new Error(`Not implemented`);
     } else {
         throw new Error(`Unknown database control key: ${key}`);
     }
+}
+
+
+async function getHistonesInfo() {
+    if (STATE.histonesInfo != null) return STATE.histonesInfo;
+    let url = "https://raw.githubusercontent.com/ajg-machine/chip-atlas/main/histones/gemini_summary.long.json";
+    let response = await fetch(url);
+    if (!response.ok) throw new Error(response);
+    let data = await response.json();
+    let histoneInfo = new Map();
+    for (let [name, description] of Object.entries(data)) {
+        histoneInfo.set(name.toLowerCase().replace(/[^\w()]+/g, ""), {name, description});
+    }
+    STATE.histonesInfo = histoneInfo;
+    return histoneInfo;
 }
 
 
@@ -402,7 +467,8 @@ async function getGenesAliases({genome}={}) {
 }
 
 async function updateSamplesList({genome, database}={}) {
-    document.getElementById("search-count").textContent = `${database.length} samples`;
+    let sampleCount = formatNumber(database.length, {thousands: ","})
+    document.getElementById("search-count").textContent = `${sampleCount} samples`;
     let samplesDiv = document.getElementById("samples-list");
     samplesDiv.textContent = "";
 
@@ -443,7 +509,8 @@ async function updateSamplesList({genome, database}={}) {
 
         
         if (index >= 500) {
-            itemDivs[3][0].textContent = `[ + ${database.length - 500} more ]`;
+            let moreCount = formatNumber(database.length - 500, {thousands: ","})
+            itemDivs[3][0].textContent = `[ + ${moreCount} more ]`;
             break;
         }
 
@@ -615,6 +682,7 @@ async function searchSamples() {
     }
 
     // Update targets list
+    let histonesInfo = await getHistonesInfo();
     let uniqueTargets = new Map();
     for (let entry of results) {
         uniqueTargets.set(entry[5][0], entry);
@@ -631,17 +699,23 @@ async function searchSamples() {
         entryNameDiv.textContent = entryNameTerm;
         entryNameDiv.target = "_blank";
 
-
         let aliases = allAliases.get(entry[5][1].match(/^([^(]*).*$/)[1].replace(/[^\w()]+/g, ""));
         let entryAliasesDiv = div.appendChild(document.createElement("span"));
-        if (!aliases) continue;
-        entryAliasesDiv.textContent = [aliases[1], ...aliases[2]]
+        if (aliases) entryAliasesDiv.textContent = [aliases[1], ...aliases[2]]
             .map(alias => `, ${alias.trim()}`)
             .join("");
+
+        let minimalName = entry[5][1].match(/^([^(]*).*$/)[1].replace(/[^\w()]+/g, "");
+        if (histonesInfo.has(minimalName)) {
+            let histoneInfo = histonesInfo.get(minimalName);
+            entryAliasesDiv.textContent += " | " +histoneInfo.description;
+        }
+
     }
     if (uniqueTargets.length > 1000) {
         let div = aliasesDiv.appendChild(document.createElement("div"));
-        div.textContent = `[ + ${uniqueTargets.length - 1000} more ]`;
+        let moreCount = formatNumber(uniqueTargets.length - 1000, {thousands: ","})
+        div.textContent = `[ + ${moreCount} more ]`;
     }
 
     await updateSamplesList({genome, database: results});
@@ -667,6 +741,8 @@ async function showFullSample({genome, srx}={}) {
     logsDiv.classList.add("section", "logs");
     let aliasesDiv = div.appendChild(document.createElement("div"));
     aliasesDiv.classList.add("section", "aliases");
+    let geminiSummaryDiv = div.appendChild(document.createElement("div"));
+    geminiSummaryDiv.classList.add("section", "gemini-summary");
     let linksDiv = div.appendChild(document.createElement("div"));
     linksDiv.classList.add("section", "links");
     let moreInfoHeaderDiv = div.appendChild(document.createElement("div"));
@@ -730,6 +806,7 @@ async function showFullSample({genome, srx}={}) {
     for (let [valueIndex, value] of data[8].entries()) {
         [keyDiv, valueDiv] = makeKeyValueDiv(logsDiv);
         keyDiv.textContent = logsHeader[valueIndex];
+        value = formatNumber(value, {thousands: ","});
         valueDiv.textContent = `${value}${logsSuffix[valueIndex]}`;
     }
 
@@ -758,6 +835,14 @@ async function showFullSample({genome, srx}={}) {
             : [aliases[0], aliases[1], ...aliases[2]];
         mouseAliasesDiv.textContent = aliases.join(", ");
     })();
+
+    let histonesInfo = await getHistonesInfo();
+    if (histonesInfo.has(minimalName)) {
+        let histoneInfo = histonesInfo.get(minimalName);
+        [keyDiv, valueDiv] = makeKeyValueDiv(geminiSummaryDiv);
+        keyDiv.textContent = `${histoneInfo.name} AI Summary`;
+        valueDiv.textContent = histoneInfo.description;
+    }
 
     [keyDiv, valueDiv] = makeKeyValueDiv(linksDiv);
     keyDiv.textContent = "Links";
@@ -802,9 +887,8 @@ async function showFullSample({genome, srx}={}) {
                 let link = fastqDiv.appendChild(document.createElement("a"));
                 link.href = `https://${paths[i]}`;
                 link.textContent = paths.length === 1 ? "Single-end" : `R${i + 1}`;
-                let size = Number(sizes[i]);
-                let sizeGB = (size / (1024 * 1024 * 1024)).toFixed(2);
-                link.textContent += ` (${sizeGB} GB)`;
+                let size = formatNumber(Number(sizes[i]), {notation: "si", precision: 0.01, thousands: ","});
+                link.textContent += ` (${size}B)`;
                 link.classList.add("appear-smoothly");
             }
         }
@@ -824,9 +908,8 @@ async function showFullSample({genome, srx}={}) {
     setTimeout(async () => {
         let response = await fetch(bigwigDiv.href, {method: "HEAD"});
         if (!response.ok) return;
-        let size = Number(response.headers.get("Content-Length"));
-        let sizeMB = (size / (1024 * 1024)).toFixed(2);
-        bigwigSizeDiv.textContent = ` (${sizeMB} MB)`;
+        let size = formatNumber(Number(response.headers.get("Content-Length")), {notation: "si", precision: 0.01, thousands: ","});
+        bigwigSizeDiv.textContent = ` (${size}B)`;
         bigwigSizeDiv.classList.add("appear-smoothly");
     }, 0);
 
