@@ -8,8 +8,7 @@
         
         <link rel="preconnect" href="https://fonts.googleapis.com">
         <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-        <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Mono:wght@100..900&family=Noto+Sans:ital,wght@0,100..900;1,100..900&family=Noto+Serif:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
-        <link href="https://fonts.googleapis.com/css2?family=Roboto+Mono:ital,wght@0,100..700;1,100..700&family=Roboto+Serif:ital,opsz,wght@0,8..144,100..900;1,8..144,100..900&family=Roboto:ital,wght@0,100..900;1,100..900&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Roboto+Condensed:ital,wght@0,100..900;1,100..900&family=Roboto+Flex:opsz,wght,XOPQ,XTRA,YOPQ,YTDE,YTFI,YTLC,YTUC@8..144,100..1000,96,468,79,-203,738,514,712&family=Roboto+Mono:ital,wght@0,100..700;1,100..700&display=swap" rel="stylesheet">
         <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:ital,wght@0,200..800;1,200..800&family=Atkinson+Hyperlegible+Next:ital,wght@0,200..800;1,200..800&display=swap" rel="stylesheet">
 
         <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
@@ -19,8 +18,9 @@
             body { padding: 0; margin: 0; }
             
             :root {
-                --font-family: "Roboto", system-ui, sans-serif;
+                --font-family: "Roboto Flex", system-ui, sans-serif;
                 --font-family-mono: "Roboto Mono", ui-monospace, monospace;
+                --font-family-condensed: "Roboto Condensed", system-ui, sans-serif;
                 --accent-color: oklch(58.8% 0.158 241.966);
                 --desaturated-color: oklch(70.7% 0.022 261.325);
                 --desaturated-accent-color: oklch(70.711% 0.09331 247.43);
@@ -737,6 +737,7 @@ async function searchSamples() {
         let aliases = allAliases.get(entry[5][1].match(/^([^(]*).*$/)[1].replace(/[^\w()]+/g, ""));
         let entryAliasesDiv = entryNameDiv.appendChild(document.createElement("span"));
         if (aliases) entryAliasesDiv.textContent = [aliases[1], ...aliases[2]]
+            .filter(alias => !(alias.length > 8 && alias.match(/^\w+rik$/i)))
             .map(alias => alias.trim())
             .join(", ");
 
@@ -849,17 +850,27 @@ async function showFullSample({genome, srx}={}) {
 
     [keyDiv, valueDiv] = makeKeyValueDiv(logsDiv);
     keyDiv.textContent = "Processing Logs";
-    let logsHeader = data[5].toLowerCase() === "bisulfite-seq"
-        ? ["Sequencing", "Mapping", "Coverage", "Hyper MR"]
-        : ["Sequencing", "Mapping", "Duplicates", "Peaks"];
-    let logsSuffix = data[5].toLowerCase() === "bisulfite-seq"
-        ? [" reads", " %", " ×", " %"]
-        : [" reads", " %", " %", " below 1e-5"];
-    for (let [valueIndex, value] of data[8].entries()) {
+    [keyDiv, valueDiv] = makeKeyValueDiv(logsDiv);
+    keyDiv.textContent = "Sequencing";
+    valueDiv.textContent = `${formatNumber(data[8][0], {thousands: ","})} reads`;
+    if (data[5].toLowerCase() === "bisulfite-seq") {
         [keyDiv, valueDiv] = makeKeyValueDiv(logsDiv);
-        keyDiv.textContent = logsHeader[valueIndex];
-        value = formatNumber(value, {thousands: ","});
-        valueDiv.textContent = `${value}${logsSuffix[valueIndex]}`;
+        keyDiv.textContent = "Mapping";
+        valueDiv.textContent = `${formatNumber(data[8][1], {thousands: ","})} %`;
+        [keyDiv, valueDiv] = makeKeyValueDiv(logsDiv);
+        keyDiv.textContent = "Coverage";
+        valueDiv.textContent = `${formatNumber(data[8][2], {thousands: ","})} ×`;
+        [keyDiv, valueDiv] = makeKeyValueDiv(logsDiv);
+        keyDiv.textContent = "Hyper MR";;
+        valueDiv.textContent = `${formatNumber(data[8][3], {thousands: ","})} %`;
+    } else {
+        [keyDiv, valueDiv] = makeKeyValueDiv(logsDiv);
+        keyDiv.textContent = "Mapping";
+        valueDiv.textContent = `${formatNumber(data[8][1], {thousands: ","})} %`;
+        valueDiv.textContent += ` with ${formatNumber(data[8][2], {thousands: ","})} % duplicates`;
+        [keyDiv, valueDiv] = makeKeyValueDiv(logsDiv);
+        keyDiv.textContent = "Peaks";
+        valueDiv.textContent = `${formatNumber(data[8][3], {thousands: ","})} below 1e-5`;
     }
 
     let minimalName = data[5].match(/^([^(]*).*$/)[1].toLowerCase().replace(/[^\w()]+/g, "");
