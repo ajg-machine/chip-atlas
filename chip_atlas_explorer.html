@@ -23,6 +23,7 @@
                 --font-family-mono: "Roboto Mono", ui-monospace, monospace;
                 --accent-color: oklch(58.8% 0.158 241.966);
                 --desaturated-color: oklch(70.7% 0.022 261.325);
+                --desaturated-accent-color: oklch(70.711% 0.09331 247.43);
             }
 
             main {
@@ -37,6 +38,9 @@
             }
             a:hover {
                 text-decoration: underline;
+            }
+            a.desaturated-color {
+                color: var(--desaturated-accent-color);
             }
 
             .appear-smoothly {
@@ -178,7 +182,7 @@
                 flex-direction: column;
                 gap: 3px;
             }
-            #targets-lists > div > :empty {
+            #targets-lists > div :empty {
                 display: none;
             }
             #targets-lists > div > :nth-child(1) > :nth-child(1) {
@@ -731,15 +735,23 @@ async function searchSamples() {
             if (targetsSummaries.has(minimalName)) {
                 let targetSummary = targetsSummaries.get(minimalName);
                 let aiSummaryDiv = entrySummaryDiv.appendChild(document.createElement("span"));
-                aiSummaryDiv.textContent = targetSummary.summary + " ";
+                aiSummaryDiv.textContent = targetSummary.summary;
+                entrySummaryDiv.appendChild(document.createElement("span")).textContent = " ";
             }
-
             let entryLinkDiv = entrySummaryDiv.appendChild(document.createElement("a"));
-            entryLinkDiv.href = `https://www.genecards.org/Search/Keyword?queryString=${encodeURIComponent(entryLabel)}`;
-            entryLinkDiv.textContent = "See more.";
+            entryLinkDiv.href = `https://www.ncbi.nlm.nih.gov/gene/?term=${encodeURIComponent(entryLabel)}`;
+            entryLinkDiv.textContent = "NCBI";
             entryLinkDiv.target = "_blank";
+            entryLinkDiv.classList.add("desaturated-color");
+            entrySummaryDiv.appendChild(document.createElement("span")).textContent = " ";
+            entryLinkDiv = entrySummaryDiv.appendChild(document.createElement("a"));
+            entryLinkDiv.href = `https://www.genecards.org/Search/Keyword?queryString=${encodeURIComponent(entryLabel)}`;
+            entryLinkDiv.textContent = "GeneCards";
+            entryLinkDiv.target = "_blank";
+            entryLinkDiv.classList.add("desaturated-color");
         }
     }
+
     if (uniqueTargets.length > 500) {
         let div = aliasesDiv.appendChild(document.createElement("div"));
         let moreCount = formatNumber(uniqueTargets.length - 500, {thousands: ","})
