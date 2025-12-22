@@ -273,6 +273,7 @@
         <script>
 "use strict";
 
+let BASE_URL = "https://raw.githubusercontent.com/ajg-machine/chip-atlas/main";
 let STATE = {
     database: {},
     databaseGenomes: null,
@@ -331,6 +332,18 @@ function formatNumber(number, {notation="full", precision=null, thousands=null}=
 }
 
 
+async function fetchUrl(url, {decompress=null, ...options}={}) {
+    let response = await fetch(url, options);
+    if (!response.ok) throw new Error(response);
+    if (decompress) {
+        let decompressionStream = new DecompressionStream(decompress);
+        let decompressedStream = response.body.pipeThrough(decompressionStream);
+        response = new Response(decompressedStream);
+    }
+    return response;
+}
+
+
 async function databaseControl(key) {
     if (key === "clear-state") {
         STATE.database = {};
@@ -360,15 +373,20 @@ async function databaseControl(key) {
 
 async function getTargetsSummaries({genome}={}) {
     if (STATE.targetsSummaries[genome] != null) return STATE.targetsSummaries[genome];
-    let url = `https://raw.githubusercontent.com/ajg-machine/chip-atlas/main/summaries/${genome}.summaries.json.gz`;
-    let response = await fetch(url);
-    if (!response.ok) throw new Error(response);
-    let decompressionStream = new DecompressionStream("gzip");
-    let decompressedStream = response.body.pipeThrough(decompressionStream);
-    let data = await new Response(decompressedStream).json();
+    let summariesUrl = `${BASE_URL}/summaries/${genome}.summaries.json.gz`;
+    let classificationsUrl = `${BASE_URL}/summaries/classifications.json.gz`;
+    let summariesResponse = fetchUrl(summariesUrl, {decompress: "gzip"});
+    let classificationsResponse = fetchUrl(classificationsUrl, {decompress: "gzip"});
+    let data = await (await summariesResponse).json();
+    let classifications = await (await classificationsResponse).json();
+    classifications = classifications[genome] || {};
     let targetsSummaries = new Map();
     for (let [name, summary] of Object.entries(data)) {
-        targetsSummaries.set(name.toLowerCase().replace(/[^\w()]+/g, ""), {name, summary});
+        let classification = classifications[name];
+        targetsSummaries.set(
+            name.toLowerCase().replace(/[^\w()]+/g, ""),
+            {name, summary, classification},
+        );
     }
     STATE.targetsSummaries[genome] = targetsSummaries;
     return targetsSummaries;
@@ -378,9 +396,8 @@ async function getTargetsSummaries({genome}={}) {
 async function getDatabaseGenomes() {
     if (STATE.databaseGenomes) return STATE.databaseGenomes;
     //let response = await fetch("/data-server/v2/chip-atlas/get-database-genomes");
-    let url = "https://raw.githubusercontent.com/ajg-machine/chip-atlas/main/database/genomes.json";
-    let response = await fetch(url);
-    if (!response.ok) throw new Error(response);
+    let url = `${BASE_URL}/database/genomes.json`;
+    let response = await fetchUrl(url);
     let data = await response.json();
     STATE.databaseGenomes = data;
     return data;
@@ -394,12 +411,9 @@ async function getDatabase({genome}={}) {
     //if (!response.ok) throw new Error(response);
     //let data = await response.text();
     let file = `${genome}.full.tsv.gz`;
-    let url = `https://raw.githubusercontent.com/ajg-machine/chip-atlas/main/database/genomes/${file}`;
-    let response = await fetch(url);
-    if (!response.ok) throw new Error(response);
-    let decompressionStream = new DecompressionStream("gzip");
-    let decompressedStream = response.body.pipeThrough(decompressionStream);
-    let data = await new Response(decompressedStream).text();
+    let url = `${BASE_URL}/database/genomes/${file}`;
+    let response = await fetchUrl(url, {decompress: "gzip"});
+    let data = await response.text();
     data = data
         .trimEnd().split("\n")
         .map(line => line.split("\t"))
@@ -428,8 +442,7 @@ async function getFullSampleData({genome, srx, offset}={}) {
     if (STATE.fullSampleData[srx]) return STATE.fullSampleData[srx];
     let url = `/data-server/v2/chip-atlas/search?genome=${genome}&srx=${srx}`;
     if (offset !== undefined) url += `&offset=${offset}`;
-    let response = await fetch(url);
-    if (!response.ok) throw new Error(response);
+    let response = await fetchUrl(url);
     let data = await response.json();
     data[8] = data[8] === "?" ? [] : data[8].split(",");
     data[9] = data[9].split(";").map(x => x.split("="));
@@ -449,12 +462,9 @@ async function getGenesAliases({genome}={}) {
     }[genome];
     let data;
     if (file) {
-        let url = `https://raw.githubusercontent.com/ajg-machine/chip-atlas/main/genes/${file}`;
-        let response = await fetch(url);
-        if (!response.ok) throw new Error(response);
-        let decompressionStream = new DecompressionStream("gzip");
-        let decompressedStream = response.body.pipeThrough(decompressionStream);
-        data = await new Response(decompressedStream).text();
+        let url = `${BASE_URL}/genes/${file}`;
+        let response = await fetchUrl(url, {decompress: "gzip"});
+        data = await response.text();
     } else {
         data = "[]";
     }
@@ -732,8 +742,12 @@ async function searchSamples() {
 
         if (STATE.showSummaries) {
             let minimalName = entry[5][1].match(/^([^(]*).*$/)[1].replace(/[^\w()]+/g, "");
-            if (targetsSummaries.has(minimalName)) {
-                let targetSummary = targetsSummaries.get(minimalName);
+            let targetSummary = targetsSummaries.get(minimalName);
+            if (targetSummary) {
+                let aiClassDiv = entrySummaryDiv.appendChild(document.createElement("span"));
+                aiClassDiv.textContent = (targetSummary.classification || "Unclassified") + ".";
+                aiClassDiv.style.fontWeight = "bold";
+                entrySummaryDiv.appendChild(document.createElement("span")).textContent = " ";
                 let aiSummaryDiv = entrySummaryDiv.appendChild(document.createElement("span"));
                 aiSummaryDiv.textContent = targetSummary.summary;
                 entrySummaryDiv.appendChild(document.createElement("span")).textContent = " ";
@@ -850,7 +864,7 @@ async function showFullSample({genome, srx}={}) {
 
     let minimalName = data[5].match(/^([^(]*).*$/)[1].toLowerCase().replace(/[^\w()]+/g, "");
     [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
-    keyDiv.textContent = "Target Info";
+    keyDiv.textContent = "Target";
     [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
     keyDiv.textContent = "Human Aliases";
     let humanAliasesDiv = valueDiv;
@@ -875,8 +889,11 @@ async function showFullSample({genome, srx}={}) {
     })();
 
     let targetsSummaries = await getTargetsSummaries({genome: data[3]});
-    if (targetsSummaries.has(minimalName)) {
-        let targetSummary = targetsSummaries.get(minimalName);
+    let targetSummary = targetsSummaries.get(minimalName);
+    if (targetSummary) {
+        [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
+        keyDiv.textContent = "AI Classification";
+        valueDiv.textContent = targetSummary.classification || "Unclassified";
         [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
         keyDiv.textContent = "AI Summary";
         valueDiv.textContent = targetSummary.summary;
@@ -911,8 +928,7 @@ async function showFullSample({genome, srx}={}) {
     let fastqDiv = valueDiv;
     setTimeout(async () => {
         let url = `https://www.ebi.ac.uk/ena/portal/api/filereport?accession=${srx}&result=read_run&fields=run_accession,fastq_ftp,fastq_bytes`;
-        let response = await fetch(url);
-        if (!response.ok) return;
+        let response = await fetchUrl(url);
         response = await response.text();
         let lines = response.trim().split("\n");
         if (lines.length < 2) return;
@@ -944,8 +960,7 @@ async function showFullSample({genome, srx}={}) {
     bigwigDiv.href = `https://chip-atlas.dbcls.jp/data/${data[3]}/eachData/bw/${srx}.bw`;
     bigwigNameDiv.textContent = "Bigwig";
     setTimeout(async () => {
-        let response = await fetch(bigwigDiv.href, {method: "HEAD"});
-        if (!response.ok) return;
+        let response = await fetchUrl(bigwigDiv.href, {method: "HEAD"});
         let size = formatNumber(Number(response.headers.get("Content-Length")), {notation: "si", precision: 0.01, thousands: ","});
         bigwigSizeDiv.textContent = ` (${size}B)`;
         bigwigSizeDiv.classList.add("appear-smoothly");
@@ -1005,8 +1020,7 @@ async function showFullSample({genome, srx}={}) {
             let genome = document.querySelector("#genome").textContent;
             let taxon = STATE.databaseGenomes[genome].taxon_id;
             let url = `https://api.ncbi.nlm.nih.gov/datasets/v2/gene/symbol/${term}/taxon/${taxon}/dataset_report`;
-            let response = await fetch(url);
-            if (!response.ok) throw new Error(response);
+            let response = await fetchUrl(url);
             let responseData = await response.json();
             if (responseData.reports == null) return;
             responseData = responseData.reports[0].gene;
@@ -1063,8 +1077,7 @@ async function setGenome({genome}={}) {
 
 async function getGSMInfo({gsm}={}) {
     let url = `https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=${gsm}&targ=self&form=text`;
-    let response = await fetch(url);
-    if (!response.ok) throw new Error(response);
+    let response = await fetchUrl(url);
     let data = await response.text();
     data = data.trim().split("\n")
         .map(line => line.slice(1).split("=").map(x => x.trim()))
