@@ -236,6 +236,7 @@
                             <div>Database:</div>
                             <a onclick="databaseControl('clear-cache')">Clear cache</a>
                             <a onclick="alert('Not implemented yet.')">Update server</a>
+                            <a id="toggle-summaries" onclick="databaseControl('toggle-summaries')">Hide summaries</a>
                         </div>
                         <div id="genome-control"">
                             <div>Genome:</div>
@@ -274,6 +275,7 @@ let STATE = {
     genesAliases: {},
     genesAliasesInserted: {},
     targetsSummaries: {},
+    showSummaries: true,
     sort: {by: 6, reverse: true},
 };
 
@@ -342,6 +344,10 @@ async function databaseControl(key) {
         await searchSamples();
     } else if (key === "update-database") {
         throw new Error(`Not implemented`);
+    } else if (key === "toggle-summaries") {
+        STATE.showSummaries = !STATE.showSummaries;
+        document.querySelector("#toggle-summaries").textContent = STATE.showSummaries ? "Hide summaries" : "Show summaries";
+        await searchSamples();
     } else {
         throw new Error(`Unknown database control key: ${key}`);
     }
@@ -720,17 +726,19 @@ async function searchSamples() {
             .map(alias => alias.trim())
             .join(", ");
 
-        let minimalName = entry[5][1].match(/^([^(]*).*$/)[1].replace(/[^\w()]+/g, "");
-        if (targetsSummaries.has(minimalName)) {
-            let targetSummary = targetsSummaries.get(minimalName);
-            let aiSummaryDiv = entrySummaryDiv.appendChild(document.createElement("span"));
-            aiSummaryDiv.textContent = targetSummary.summary + " ";
-        }
+        if (STATE.showSummaries) {
+            let minimalName = entry[5][1].match(/^([^(]*).*$/)[1].replace(/[^\w()]+/g, "");
+            if (targetsSummaries.has(minimalName)) {
+                let targetSummary = targetsSummaries.get(minimalName);
+                let aiSummaryDiv = entrySummaryDiv.appendChild(document.createElement("span"));
+                aiSummaryDiv.textContent = targetSummary.summary + " ";
+            }
 
-        let entryLinkDiv = entrySummaryDiv.appendChild(document.createElement("a"));
-        entryLinkDiv.href = `https://www.genecards.org/Search/Keyword?queryString=${encodeURIComponent(entryLabel)}`;
-        entryLinkDiv.textContent = "See more.";
-        entryLinkDiv.target = "_blank";
+            let entryLinkDiv = entrySummaryDiv.appendChild(document.createElement("a"));
+            entryLinkDiv.href = `https://www.genecards.org/Search/Keyword?queryString=${encodeURIComponent(entryLabel)}`;
+            entryLinkDiv.textContent = "See more.";
+            entryLinkDiv.target = "_blank";
+        }
     }
     if (uniqueTargets.length > 500) {
         let div = aliasesDiv.appendChild(document.createElement("div"));
