@@ -277,9 +277,8 @@ let BASE_URL = "https://raw.githubusercontent.com/ajg-machine/chip-atlas/main";
 let STATE = {
     database: {},
     databaseGenomes: null,
-    genesAliases: {},
-    genesAliasesInserted: {},
     targetsSummaries: {},
+    aliasesInserted: {},
     showSummaries: true,
     sort: {by: 6, reverse: true},
 };
@@ -348,15 +347,13 @@ async function databaseControl(key) {
     if (key === "clear-state") {
         STATE.database = {};
         STATE.databaseGenomes = null;
-        STATE.genesAliases = {};
-        STATE.genesAliasesInserted = {};
         STATE.targetsSummaries = {};
+        STATE.aliasesInserted = {};
         STATE.sort = {by: null, reverse: false};
     } else if (key === "clear-cache") {
         await databaseControl("clear-state");
         await getDatabaseGenomes();
         await getDatabase({genome: document.querySelector("#genome").textContent});
-        await getGenesAliases({genome: document.querySelector("#genome").textContent});
         await getTargetsSummaries({genome: document.querySelector("#genome").textContent});
         await searchSamples();
     } else if (key === "update-database") {
@@ -371,22 +368,37 @@ async function databaseControl(key) {
 }
 
 
+function getMinimalTargetName(name) {
+    return name.toLowerCase().match(/^([^(]*).*$/)[1].replace(/[^\w()]+/g, "");
+}
+
+
 async function getTargetsSummaries({genome}={}) {
     if (STATE.targetsSummaries[genome] != null) return STATE.targetsSummaries[genome];
-    let summariesUrl = `${BASE_URL}/summaries/${genome}.summaries.json.gz`;
-    let classificationsUrl = `${BASE_URL}/summaries/classifications.json.gz`;
-    let summariesResponse = fetchUrl(summariesUrl, {decompress: "gzip"});
-    let classificationsResponse = fetchUrl(classificationsUrl, {decompress: "gzip"});
-    let data = await (await summariesResponse).json();
-    let classifications = await (await classificationsResponse).json();
-    classifications = classifications[genome] || {};
+    let url = `${BASE_URL}/summaries/${genome}.summaries.json.gz`;
+    let response = await fetchUrl(url, {decompress: "gzip"});
+    let data = await response.json();
     let targetsSummaries = new Map();
-    for (let [name, summary] of Object.entries(data)) {
-        let classification = classifications[name];
+    for (let [name, entryData] of Object.entries(data)) {
+        let minimalName = getMinimalTargetName(name);
+        entryData.aliases = (entryData.aliases || [])
+            .filter(alias => getMinimalTargetName(alias) !== minimalName);
         targetsSummaries.set(
-            name.toLowerCase().replace(/[^\w()]+/g, ""),
-            {name, summary, classification},
+            minimalName,
+            {name, ...entryData},
         );
+    }
+    if (!STATE.aliasesInserted[genome]) {
+        let database = await getDatabase({genome});
+        for (let entry of database) {
+            let minimalName = getMinimalTargetName(entry[5][1]);
+            let summary = targetsSummaries.get(minimalName);
+            if (!summary) continue;
+            let aliases = (summary.aliases || [])
+                .map(alias => getMinimalTargetName(alias));
+            entry[10][1] = (entry[10][1] ? entry[10][1] + " " : "") + aliases.join(" ");            
+        }
+        STATE.aliasesInserted[genome] = true;
     }
     STATE.targetsSummaries[genome] = targetsSummaries;
     return targetsSummaries;
@@ -450,58 +462,6 @@ async function getFullSampleData({genome, srx, offset}={}) {
     return data;
 }
 
-async function getGenesAliases({genome}={}) {
-    if (STATE.genesAliases[genome]) return STATE.genesAliases[genome];
-    //let url = `/data-server/v2/chip-atlas/get-genes-aliases?genome=${genome}`;
-    //let response = await fetch(url);
-    //if (!response.ok) throw new Error(response);
-    //let data = await response.text();
-    let file = {
-        hg38: "hugo_genenames.aliases.json.gz",
-        mm10: "mgi_markers.aliases.json.gz",
-    }[genome];
-    let data;
-    if (file) {
-        let url = `${BASE_URL}/genes/${file}`;
-        let response = await fetchUrl(url, {decompress: "gzip"});
-        data = await response.text();
-    } else {
-        data = "[]";
-    }
-    data = JSON.parse(data);
-    data = new Map(data.map(entry => [entry[0].toLowerCase().replace(/[^\w()]+/g, ""), entry]));
-
-    let dataFromAliases = new Map();
-    for (let entry of data.values()) {
-        for (let alias of [entry[1], ...entry[2]]) {
-            let minimalName = alias.toLowerCase().replace(/[^\w()]+/g, "");
-            let aliasDataFromAliases = dataFromAliases.get(minimalName);
-            if (aliasDataFromAliases) {
-                aliasDataFromAliases.push(entry);
-            } else {
-                dataFromAliases.set(minimalName, [entry]);
-            }
-        }
-    }
-    for (let [key, value] of dataFromAliases.entries()) {
-        if (value.length === 1 && !data.has(key)) data.set(key, value[0]);
-    }
-
-    STATE.genesAliases[genome] = data;
-    if (!STATE.genesAliasesInserted[genome]) {
-        STATE.genesAliasesInserted[genome] = true;
-        let database = await getDatabase({genome});
-        for (let entry of database) {
-            let minimalName = entry[5][1].match(/^([^(]*).*$/)[1];
-            let aliases = data.get(minimalName);
-            if (!aliases) continue;
-            aliases = [aliases[1], ...aliases[2]]
-                .map(alias => alias.toLowerCase().replace(/[^\w()]+/g, ""));
-            entry[10][1] = (entry[10][1] ? entry[10][1] + " " : "") + aliases.join(" ");            
-        }
-    }
-    return data;
-}
 
 async function updateSamplesList({genome, database}={}) {
     let sampleCount = formatNumber(database.length, {thousands: ","})
@@ -686,10 +646,10 @@ async function searchSamples() {
         return false;
     };
     
-    // Get genes aliases
-    let aliasesDiv = document.getElementById("targets-lists");
-    aliasesDiv.textContent = "";
-    let allAliases = await getGenesAliases({genome: document.querySelector("#genome").textContent});
+    // Get targets summaries
+    let targetsListsDiv = document.getElementById("targets-lists");
+    targetsListsDiv.textContent = "";
+    let targetsSummaries = await getTargetsSummaries({genome: document.querySelector("#genome").textContent});
 
     // Parse the query string
     queryString = queryString.trim();
@@ -719,14 +679,13 @@ async function searchSamples() {
     }
 
     // Update targets list
-    let targetsSummaries = await getTargetsSummaries({genome: document.querySelector("#genome").textContent});
     let uniqueTargets = new Map();
     for (let entry of results) {
         uniqueTargets.set(entry[5][0], entry);
     }
     uniqueTargets = Array.from(uniqueTargets.values());
     for (let entry of uniqueTargets.slice(0, 1000)) {
-        let div = aliasesDiv.appendChild(document.createElement("div"));
+        let div = targetsListsDiv.appendChild(document.createElement("div"));
         let entryNameDiv = div.appendChild(document.createElement("div"));
         let entrySummaryDiv = div.appendChild(document.createElement("div"));
 
@@ -734,25 +693,23 @@ async function searchSamples() {
         let entryLabelDiv = entryNameDiv.appendChild(document.createElement("span"));
         entryLabelDiv.textContent = entryLabel;
 
-        let aliases = allAliases.get(entry[5][1].match(/^([^(]*).*$/)[1].replace(/[^\w()]+/g, ""));
+        let minimalName = getMinimalTargetName(entry[5][1]);
+        let targetSummary = targetsSummaries.get(minimalName) || {};
         let entryAliasesDiv = entryNameDiv.appendChild(document.createElement("span"));
-        if (aliases) entryAliasesDiv.textContent = [aliases[1], ...aliases[2]]
+        entryAliasesDiv.textContent = (targetSummary.aliases || [])
             .filter(alias => !(alias.length > 8 && alias.match(/^\w+rik$/i)))
             .map(alias => alias.trim())
             .join(", ");
 
         if (STATE.showSummaries) {
-            let minimalName = entry[5][1].match(/^([^(]*).*$/)[1].replace(/[^\w()]+/g, "");
-            let targetSummary = targetsSummaries.get(minimalName);
-            if (targetSummary) {
-                let aiClassDiv = entrySummaryDiv.appendChild(document.createElement("span"));
-                aiClassDiv.textContent = (targetSummary.classification || "Unclassified") + ".";
-                aiClassDiv.style.fontWeight = "bold";
-                entrySummaryDiv.appendChild(document.createElement("span")).textContent = " ";
-                let aiSummaryDiv = entrySummaryDiv.appendChild(document.createElement("span"));
-                aiSummaryDiv.textContent = targetSummary.summary;
-                entrySummaryDiv.appendChild(document.createElement("span")).textContent = " ";
-            }
+            let aiClassDiv = entrySummaryDiv.appendChild(document.createElement("span"));
+            aiClassDiv.textContent = (targetSummary.classification || "Unclassified") + ".";
+            aiClassDiv.style.fontWeight = "bold";
+            entrySummaryDiv.appendChild(document.createElement("span")).textContent = " ";
+            let aiSummaryDiv = entrySummaryDiv.appendChild(document.createElement("span"));
+            aiSummaryDiv.textContent = targetSummary.summary || "No summary available.";
+            entrySummaryDiv.appendChild(document.createElement("span")).textContent = " ";
+            
             let entryLinkDiv = entrySummaryDiv.appendChild(document.createElement("a"));
             entryLinkDiv.href = `https://www.ncbi.nlm.nih.gov/gene/?term=${encodeURIComponent(entryLabel)}`;
             entryLinkDiv.textContent = "NCBI";
@@ -768,7 +725,7 @@ async function searchSamples() {
     }
 
     if (uniqueTargets.length > 500) {
-        let div = aliasesDiv.appendChild(document.createElement("div"));
+        let div = targetsListsDiv.appendChild(document.createElement("div"));
         let moreCount = formatNumber(uniqueTargets.length - 500, {thousands: ","})
         div.textContent = `[ + ${moreCount} more ]`;
     }
@@ -873,42 +830,25 @@ async function showFullSample({genome, srx}={}) {
         valueDiv.textContent = `${formatNumber(data[8][3], {thousands: ","})} below 1e-5`;
     }
 
-    let minimalName = data[5].match(/^([^(]*).*$/)[1].toLowerCase().replace(/[^\w()]+/g, "");
+    let minimalName = getMinimalTargetName(data[5]);
+    let targetsSummaries = await getTargetsSummaries({genome: document.querySelector("#genome").textContent});
+    let targetSummary = targetsSummaries.get(minimalName) || {};
     [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
-    keyDiv.textContent = "Target";
+    keyDiv.textContent = "Target Summary";
     [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
-    keyDiv.textContent = "Human Aliases";
-    let humanAliasesDiv = valueDiv;
-    (async () => {
-        let aliases = await getGenesAliases({genome: "hg38"});
-        aliases = aliases.get(minimalName);
-        aliases = aliases == null
-            ? [data[5].match(/^([^(]*).*$/)[1]]
-            : [aliases[0], aliases[1], ...aliases[2]];
-        humanAliasesDiv.textContent = aliases.join(", ");
-    })();
-    [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
-    keyDiv.textContent = "Mouse Aliases";
-    let mouseAliasesDiv = valueDiv;
-    (async () => {
-        let aliases = await getGenesAliases({genome: "mm10"});
-        aliases = aliases.get(minimalName);
-        aliases = aliases == null
-            ? [data[5].match(/^([^(]*).*$/)[1]]
-            : [aliases[0], aliases[1], ...aliases[2]];
-        mouseAliasesDiv.textContent = aliases.join(", ");
-    })();
-
-    let targetsSummaries = await getTargetsSummaries({genome: data[3]});
-    let targetSummary = targetsSummaries.get(minimalName);
-    if (targetSummary) {
+    keyDiv.textContent = "Name";
+    valueDiv.textContent = `${targetSummary.name} | ${(targetSummary.aliases || [])[0]}`;
+    if ((targetSummary.aliases || []).length > 1) {
         [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
-        keyDiv.textContent = "AI Classification";
-        valueDiv.textContent = targetSummary.classification || "Unclassified";
-        [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
-        keyDiv.textContent = "AI Summary";
-        valueDiv.textContent = targetSummary.summary;
+        keyDiv.textContent = "Aliases";
+        valueDiv.textContent = targetSummary.aliases.slice(1).join(", ");
     }
+    [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
+    keyDiv.textContent = "Classification";
+    valueDiv.textContent = targetSummary.classification || "Unclassified";
+    [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
+    keyDiv.textContent = "Summary";
+    valueDiv.textContent = targetSummary.summary || "No summary available.";
 
     [keyDiv, valueDiv] = makeKeyValueDiv(linksDiv);
     keyDiv.textContent = "Links";
@@ -1126,11 +1066,6 @@ async function main() {
 
     await setGenome({genome: document.querySelector("#genome").textContent});
     await searchSamples();
-    setTimeout(async () => {
-        await getGenesAliases({genome: document.querySelector("#genome").textContent});
-        await getGenesAliases({genome: "mm10"});
-        await getGenesAliases({genome: "hg38"});
-    }, 0);
 
 }
 
