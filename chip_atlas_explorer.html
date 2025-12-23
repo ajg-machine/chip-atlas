@@ -697,7 +697,6 @@ async function searchSamples() {
         let targetSummary = targetsSummaries.get(minimalName) || {};
         let entryAliasesDiv = entryNameDiv.appendChild(document.createElement("span"));
         entryAliasesDiv.textContent = (targetSummary.aliases || [])
-            .filter(alias => !(alias.length > 8 && alias.match(/^\w+rik$/i)))
             .map(alias => alias.trim())
             .join(", ");
 
