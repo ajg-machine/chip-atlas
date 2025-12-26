@@ -405,6 +405,9 @@ async function getTargetsSummaries({genome}={}) {
         let minimalName = getMinimalTargetName(name);
         entryData.name = name;
         entryData.minimalName = minimalName;
+        let pattern = /\*([\w #!/|\\"'<>.,;:=-]*)\*/g;
+        entryData.description = entryData.description.replace(pattern, "$1");
+        entryData.long_description = entryData.long_description.replace(pattern, "$1");
         entryData.aliases = entryData.aliases
             .filter(alias => getMinimalTargetName(alias) !== minimalName);
         targetsSummaries.set(minimalName, entryData);
