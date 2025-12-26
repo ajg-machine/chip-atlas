@@ -412,7 +412,7 @@ async function getTargetsSummaries({genome}={}) {
     if (!STATE.aliasesInserted[genome]) {
         let database = await getDatabase({genome});
         for (let entry of database) {
-            let minimalName = entry[5][1];
+            let minimalName = getMinimalTargetName(entry[5][0]);
             let summary = targetsSummaries.get(minimalName);
             if (!summary) continue;
             let aliases = [summary.name, summary.full_name, ...summary.aliases]
