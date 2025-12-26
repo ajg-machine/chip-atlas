@@ -75,14 +75,34 @@
             }
             .checkbox::before {
                 color: var(--accent-color);
-                font-size: 80%;
                 padding-right: 3px;
             }
             .checkbox[data-checked="true"]::before {
-                content: "● ";
+                font-family: "Material Symbols Outlined";
+                content: "radio_button_checked";
             }
             .checkbox:not([data-checked="true"])::before {
-                content: "○ ";
+                font-family: "Material Symbols Outlined";
+                content: "radio_button_unchecked";
+            }
+
+            .symbol-left, .symbol-right {
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+            }
+            .symbol-left::before {
+                content: attr(data-symbol);
+                font-family: "Material Symbols Outlined";
+                padding-right: 3px;
+            }
+            .symbol-right::after {
+                content: attr(data-symbol);
+                font-family: "Material Symbols Outlined";
+                padding-left: 3px;
+            }
+            .symbol-left.symbol-colored::before, .symbol-right.symbol-colored::after {
+                color: var(--accent-color);
             }
 
             #explorer {
@@ -502,7 +522,8 @@ async function updateSamplesList({genome, database}={}) {
         titleDiv.textContent = title;
         div.dataset.sortIndex = sortIndex;
         if (STATE.sort.by === Number(div.dataset.sortIndex)) {
-            div.children[1].textContent = STATE.sort.reverse ? "▼" : "▲";
+            div.children[1].textContent = STATE.sort.reverse ? "keyboard_arrow_down" : "keyboard_arrow_up";
+            div.children[1].style.fontFamily = "Material Symbols Outlined";
         }
         div.onclick = () => {
             if (STATE.sort.by === Number(div.dataset.sortIndex)) {
@@ -795,12 +816,16 @@ function initFullInfo({type, accession, isNavigation=false}={}) {
     controlDiv.classList.add("section");
     if (STATE.fullInfo.back.length > 1 || STATE.fullInfo.forward.length > 0) {
         controlDiv = controlDiv.appendChild(document.createElement("div"));
+        controlDiv.style.display = "flex";
+        controlDiv.style.columnGap = "15px";
     }
     
     if (STATE.fullInfo.back.length > 1) {
         let backDiv = controlDiv.appendChild(document.createElement("a"));
         let previous = STATE.fullInfo.back[STATE.fullInfo.back.length - 2];
-        backDiv.textContent = `← ${previous.accession.key}`;
+        backDiv.textContent = previous.accession.key;
+        backDiv.classList.add("symbol-left", "symbol-colored", "no-underline", "only-colored-on-hover");
+        backDiv.dataset.symbol = "keyboard_arrow_left";
         backDiv.onclick = async () => {
             let current = STATE.fullInfo.back.pop();
             if (!current) return;
@@ -816,9 +841,10 @@ function initFullInfo({type, accession, isNavigation=false}={}) {
     }
     if (STATE.fullInfo.forward.length > 0) {
         let forwardDiv = controlDiv.appendChild(document.createElement("a"));
-        if (STATE.fullInfo.back.length > 1) forwardDiv.style.marginLeft = "15px";
         let next = STATE.fullInfo.forward[STATE.fullInfo.forward.length - 1];
-        forwardDiv.textContent = `${next.accession.key} →`;
+        forwardDiv.textContent = next.accession.key;
+        forwardDiv.classList.add("symbol-right", "symbol-colored", "no-underline", "only-colored-on-hover");
+        forwardDiv.dataset.symbol = "keyboard_arrow_right";
         forwardDiv.onclick = async () => {
             let next = STATE.fullInfo.forward.pop();
             if (!next) return;
