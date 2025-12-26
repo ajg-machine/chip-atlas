@@ -26,17 +26,31 @@
                 --desaturated-accent-color: oklch(70.711% 0.09331 247.43);
             }
 
+            .material-symbols-outlined {
+                font-size: 100%;
+                font-variation-settings:
+                'FILL' 0,
+                'wght' 400,
+                'GRAD' 0,
+                'opsz' 24
+            }
+
             main {
                 font-family: var(--font-family);
                 font-size: 13px;
             }
 
             a {
-                color: var(--accent-color);
                 text-decoration: none;
                 cursor: pointer;
             }
+            a:not(.only-colored-on-hover) {
+                color: var(--accent-color);
+            }
             a:hover {
+                color: var(--accent-color);
+            }
+            a:hover:not(.no-underline) {
                 text-decoration: underline;
             }
             a.desaturated-color {
@@ -49,6 +63,26 @@
             @keyframes appearSmoothly {
                 from { opacity: 0; }
                 to { opacity: 1; }
+            }
+
+            .checkbox {
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+            }
+            .checkbox:hover {
+                color: var(--accent-color);
+            }
+            .checkbox::before {
+                color: var(--accent-color);
+                font-size: 80%;
+                padding-right: 3px;
+            }
+            .checkbox[data-checked="true"]::before {
+                content: "● ";
+            }
+            .checkbox:not([data-checked="true"])::before {
+                content: "○ ";
             }
 
             #explorer {
@@ -82,6 +116,21 @@
                 flex-direction: row;
                 align-items: center;
                 column-gap: 5px;
+                
+                position: sticky;
+                top: 0;
+                background: white;
+                z-index: 2;
+                padding-bottom: 5px;
+            }
+            #samples-list > div:nth-child(1) > div::before {
+                content: "";
+                position: absolute;
+                top: -20px;
+                left: 0;
+                width: 100%;
+                height: 20px;
+                background: white;
             }
             #samples-list > div > div {
                 min-width: 40px;
@@ -129,26 +178,6 @@
                 display: flex;
                 flex-direction: row;
                 column-gap: 10px;
-            }
-
-            #search-fields-control > div:not(:nth-child(1)) {
-                cursor: pointer;
-                display: flex;
-                align-items: center;
-            }
-            #search-fields-control > div:not(:nth-child(1)):hover {
-                color: var(--accent-color);
-            }
-            #search-fields-control > div:not(:nth-child(1))::before {
-                color: var(--accent-color);
-                font-size: 80%;
-                padding-right: 3px;
-            }
-            #search-fields-control > div:not(:nth-child(1))[data-checked="true"]::before {
-                content: "● ";
-            }
-            #search-fields-control > div:not(:nth-child(1)):not([data-checked="true"])::before {
-                content: "○ ";
             }
 
             #search-control {
@@ -237,24 +266,21 @@
                 <div id="panel">
                     <div id="controls">
                         <div>
-                            <div>Database:</div>
-                            <a onclick="databaseControl('clear-cache')">Clear cache</a>
-                            <a onclick="alert('Not implemented yet.')">Update server</a>
-                            <a id="toggle-summaries" onclick="databaseControl('toggle-summaries')">Hide summaries</a>
+                            <div>Display:</div>
+                            <div class="checkbox" id="toggle-summaries" onclick="databaseControl('toggle-summaries')" data-checked="true">Summaries</div>
                         </div>
-                        <div id="genome-control"">
+                        <div id="genome-control">
                             <div>Genome:</div>
-                            <span id="genome">mm10</span>
                         </div>
                         <div id="search-fields-control">
                             <div>Search in:</div>
-                            <div data-checked="true" data-indexes="0,1,2">IDs</span></div>
-                            <div data-checked="true" data-indexes="5">Target</div>
-                            <div data-checked="true" data-indexes="10">Aliases</div>
-                            <div data-checked="true" data-indexes="4">Cell</div>
-                            <div data-indexes="6">Date</div>
-                            <div data-indexes="7">Title</div>
-                            <div data-indexes="9">Attributes</div>
+                            <div class="checkbox" data-checked="true" data-indexes="0,1,2">IDs</div>
+                            <div class="checkbox" data-checked="true" data-indexes="5">Target</div>
+                            <div class="checkbox" data-checked="true" data-indexes="10">Aliases</div>
+                            <div class="checkbox" data-checked="true" data-indexes="4">Cell</div>
+                            <div class="checkbox" data-indexes="6">Date</div>
+                            <div class="checkbox" data-indexes="7">Title</div>
+                            <div class="checkbox" data-indexes="9">Attributes</div>
                         </div>
                         <div id="search-control">
                             <div>Search:</div>
@@ -275,11 +301,16 @@
 
 let BASE_URL = "https://raw.githubusercontent.com/ajg-machine/chip-atlas/main";
 let STATE = {
+    genome: {selected: "mm10", available: null},
     database: {},
-    databaseGenomes: null,
     targetsSummaries: {},
     aliasesInserted: {},
-    showSummaries: true,
+    display: {
+        summaries: true,
+        sampleCount: 500,
+        targetCount: 500,
+    },
+    fullInfo: {back: [], forward: []},
     sort: {by: 6, reverse: true},
 };
 
@@ -344,23 +375,9 @@ async function fetchUrl(url, {decompress=null, ...options}={}) {
 
 
 async function databaseControl(key) {
-    if (key === "clear-state") {
-        STATE.database = {};
-        STATE.databaseGenomes = null;
-        STATE.targetsSummaries = {};
-        STATE.aliasesInserted = {};
-        STATE.sort = {by: null, reverse: false};
-    } else if (key === "clear-cache") {
-        await databaseControl("clear-state");
-        await getDatabaseGenomes();
-        await getDatabase({genome: document.querySelector("#genome").textContent});
-        await getTargetsSummaries({genome: document.querySelector("#genome").textContent});
-        await searchSamples();
-    } else if (key === "update-database") {
-        throw new Error(`Not implemented`);
-    } else if (key === "toggle-summaries") {
-        STATE.showSummaries = !STATE.showSummaries;
-        document.querySelector("#toggle-summaries").textContent = STATE.showSummaries ? "Hide summaries" : "Show summaries";
+    if (key === "toggle-summaries") {
+        STATE.display.summaries = !STATE.display.summaries;
+        document.querySelector("#toggle-summaries").dataset.checked = STATE.display.summaries ? "true" : "false";
         await searchSamples();
     } else {
         throw new Error(`Unknown database control key: ${key}`);
@@ -375,27 +392,31 @@ function getMinimalTargetName(name) {
 
 async function getTargetsSummaries({genome}={}) {
     if (STATE.targetsSummaries[genome] != null) return STATE.targetsSummaries[genome];
-    let url = `${BASE_URL}/summaries/${genome}.summaries.json.gz`;
-    let response = await fetchUrl(url, {decompress: "gzip"});
-    let data = await response.json();
+    let url = `${BASE_URL}/summaries/${genome}.json.gz`;
+    let data = {};
+    try {
+        let response = await fetchUrl(url, {decompress: "gzip"});
+        data = await response.json();
+    } catch (e) {
+        console.error(`No summaries for genome ${genome}`);
+    }
     let targetsSummaries = new Map();
     for (let [name, entryData] of Object.entries(data)) {
         let minimalName = getMinimalTargetName(name);
-        entryData.aliases = (entryData.aliases || [])
+        entryData.name = name;
+        entryData.minimalName = minimalName;
+        entryData.aliases = entryData.aliases
             .filter(alias => getMinimalTargetName(alias) !== minimalName);
-        targetsSummaries.set(
-            minimalName,
-            {name, ...entryData},
-        );
+        targetsSummaries.set(minimalName, entryData);
     }
     if (!STATE.aliasesInserted[genome]) {
         let database = await getDatabase({genome});
         for (let entry of database) {
-            let minimalName = getMinimalTargetName(entry[5][1]);
+            let minimalName = entry[5][1];
             let summary = targetsSummaries.get(minimalName);
             if (!summary) continue;
-            let aliases = (summary.aliases || [])
-                .map(alias => getMinimalTargetName(alias));
+            let aliases = [summary.name, summary.full_name, ...summary.aliases]
+                .map(getMinimalTargetName);
             entry[10][1] = (entry[10][1] ? entry[10][1] + " " : "") + aliases.join(" ");            
         }
         STATE.aliasesInserted[genome] = true;
@@ -406,13 +427,28 @@ async function getTargetsSummaries({genome}={}) {
 
 
 async function getDatabaseGenomes() {
-    if (STATE.databaseGenomes) return STATE.databaseGenomes;
+    if (STATE.genome.available) return STATE.genome.available;
     //let response = await fetch("/data-server/v2/chip-atlas/get-database-genomes");
     let url = `${BASE_URL}/database/genomes.json`;
     let response = await fetchUrl(url);
     let data = await response.json();
-    STATE.databaseGenomes = data;
-    return data;
+    STATE.genome.available = data;
+
+    let genomeControl = document.querySelector("#genome-control");
+    genomeControl.querySelectorAll(".checkbox").forEach(e => e.remove());
+    for (let choice of Object.keys(data).toSorted()) {
+        let div = genomeControl.appendChild(document.createElement("div"));
+        div.textContent = choice;
+        div.classList.add("checkbox");
+        div.dataset.checked = (choice === STATE.genome.selected ? "true" : "false");
+        div.onclick = async () => {
+            if (div.dataset.checked === "true") return;
+            genomeControl.querySelectorAll(".checkbox").forEach(e => e.dataset.checked = "false");
+            div.dataset.checked = "true";
+            STATE.genome.selected = choice;
+            await searchSamples();
+        };
+    }
 }
 
 
@@ -445,20 +481,6 @@ async function getDatabase({genome}={}) {
             return entry;
         }));
     STATE.database[genome] = data;
-    return data;
-}
-
-
-async function getFullSampleData({genome, srx, offset}={}) {
-    throw new Error(`Use full database`);
-    if (STATE.fullSampleData[srx]) return STATE.fullSampleData[srx];
-    let url = `/data-server/v2/chip-atlas/search?genome=${genome}&srx=${srx}`;
-    if (offset !== undefined) url += `&offset=${offset}`;
-    let response = await fetchUrl(url);
-    let data = await response.json();
-    data[8] = data[8] === "?" ? [] : data[8].split(",");
-    data[9] = data[9].split(";").map(x => x.split("="));
-    STATE.fullSampleData[srx] = data;
     return data;
 }
 
@@ -505,16 +527,16 @@ async function updateSamplesList({genome, database}={}) {
         let itemDivs = makeItemsDivs(rowDiv);
 
         
-        if (index >= 500) {
-            let moreCount = formatNumber(database.length - 500, {thousands: ","})
+        if (index >= STATE.display.sampleCount) {
+            let moreCount = formatNumber(database.length - STATE.display.sampleCount, {thousands: ","})
             itemDivs[3][0].textContent = `[ + ${moreCount} more ]`;
             break;
         }
 
         itemDivs[0][0].textContent = sample[6][0];
         itemDivs[0][1].textContent = "+ Expand data";
-        itemDivs[0][0].onclick = () => showFullSample({genome, srx: sample[2][0]});
-        itemDivs[0][1].onclick = () => showFullSample({genome, srx: sample[2][0]});
+        itemDivs[0][0].onclick = () => showFullSample({genome, key: sample[2][0]});
+        itemDivs[0][1].onclick = () => showFullSample({genome, key: sample[2][0]});
         itemDivs[1][0].textContent = sample[0][0];
         itemDivs[1][1].textContent = sample[2][0];
         itemDivs[2][0].textContent = sample[5][0].match(/^([^(]*).*$/)[1];
@@ -540,7 +562,7 @@ async function updateSamplesList({genome, database}={}) {
 
 
 async function searchSamples() {
-    let genome = document.querySelector("#genome").textContent;
+    let genome = STATE.genome.selected;
     let database = await getDatabase({genome});
     let queryString = document.querySelector("#search").textContent;
     let searchFieldsIndexes = Array.from(document.querySelectorAll("#search-fields-control > div[data-checked='true']"))
@@ -649,7 +671,7 @@ async function searchSamples() {
     // Get targets summaries
     let targetsListsDiv = document.getElementById("targets-lists");
     targetsListsDiv.textContent = "";
-    let targetsSummaries = await getTargetsSummaries({genome: document.querySelector("#genome").textContent});
+    let targetsSummaries = await getTargetsSummaries({genome});
 
     // Parse the query string
     queryString = queryString.trim();
@@ -689,43 +711,36 @@ async function searchSamples() {
         let entryNameDiv = div.appendChild(document.createElement("div"));
         let entrySummaryDiv = div.appendChild(document.createElement("div"));
 
-        let entryLabel = entry[5][0].match(/^([^(]*).*$/)[1].trim();
-        let entryLabelDiv = entryNameDiv.appendChild(document.createElement("span"));
-        entryLabelDiv.textContent = entryLabel;
-
         let minimalName = getMinimalTargetName(entry[5][1]);
-        let targetSummary = targetsSummaries.get(minimalName) || {};
+        let summary = targetsSummaries.get(minimalName) || {};
+
+        let entryLabelDiv = entryNameDiv.appendChild(document.createElement("span"));
+        entryLabelDiv.textContent = summary.name || entry[5][0];
         let entryAliasesDiv = entryNameDiv.appendChild(document.createElement("span"));
-        entryAliasesDiv.textContent = (targetSummary.aliases || [])
+        entryAliasesDiv.textContent = [summary.full_name || "", ...(summary.aliases || [])]
+            .filter(x => x.length > 0)
             .map(alias => alias.trim())
             .join(", ");
 
-        if (STATE.showSummaries) {
-            let aiClassDiv = entrySummaryDiv.appendChild(document.createElement("span"));
-            aiClassDiv.textContent = (targetSummary.classification || "Unclassified") + ".";
-            aiClassDiv.style.fontWeight = "bold";
+        if (STATE.display.summaries) {
+            let classDiv = entrySummaryDiv.appendChild(document.createElement("span"));
+            classDiv.textContent = (summary.classification || "Unclassified") + ".";
+            classDiv.style.fontWeight = "bold";
             entrySummaryDiv.appendChild(document.createElement("span")).textContent = " ";
-            let aiSummaryDiv = entrySummaryDiv.appendChild(document.createElement("span"));
-            aiSummaryDiv.textContent = targetSummary.summary || "No summary available.";
-            entrySummaryDiv.appendChild(document.createElement("span")).textContent = " ";
+            let descriptionDiv = entrySummaryDiv.appendChild(document.createElement("span"));
+            descriptionDiv.textContent = summary.description || "No summary available.";
+            descriptionDiv.appendChild(document.createElement("span")).textContent = " ";
             
-            let entryLinkDiv = entrySummaryDiv.appendChild(document.createElement("a"));
-            entryLinkDiv.href = `https://www.ncbi.nlm.nih.gov/gene/?term=${encodeURIComponent(entryLabel)}`;
-            entryLinkDiv.textContent = "NCBI";
-            entryLinkDiv.target = "_blank";
-            entryLinkDiv.classList.add("desaturated-color");
-            entrySummaryDiv.appendChild(document.createElement("span")).textContent = " ";
-            entryLinkDiv = entrySummaryDiv.appendChild(document.createElement("a"));
-            entryLinkDiv.href = `https://www.genecards.org/Search/Keyword?queryString=${encodeURIComponent(entryLabel)}`;
-            entryLinkDiv.textContent = "GeneCards";
-            entryLinkDiv.target = "_blank";
-            entryLinkDiv.classList.add("desaturated-color");
+            let entryExpandDiv = entrySummaryDiv.appendChild(document.createElement("a"));
+            entryExpandDiv.onclick = () => showTargetSummary({genome, key: summary.name});
+            entryExpandDiv.textContent = "Expand";
+            entryExpandDiv.classList.add("desaturated-color");
         }
     }
 
-    if (uniqueTargets.length > 500) {
+    if (uniqueTargets.length > STATE.display.targetCount) {
         let div = targetsListsDiv.appendChild(document.createElement("div"));
-        let moreCount = formatNumber(uniqueTargets.length - 500, {thousands: ","})
+        let moreCount = formatNumber(uniqueTargets.length - STATE.display.targetCount, {thousands: ","})
         div.textContent = `[ + ${moreCount} more ]`;
     }
 
@@ -733,8 +748,188 @@ async function searchSamples() {
 }
 
 
+function makeKeyValueDiv(parent, {fieldClasses=[]}={}) {
+    let fieldDiv = parent.appendChild(document.createElement("div"));
+    for (let fieldClass of fieldClasses) {
+        fieldDiv.classList.add(fieldClass);
+    }
+    fieldDiv.classList.add("key-value-pair");
+    let keyDiv = fieldDiv.appendChild(document.createElement("div"));
+    let valueDiv = fieldDiv.appendChild(document.createElement("div"));
+    return [keyDiv, valueDiv];
+}
+async function toggleMoreInfo(moreInfoHeaderDiv, moreInfoDiv, div, openFunction) {
+    let divOpened = div.dataset.opened === "true";
+    moreInfoDiv.textContent = "";
+    moreInfoHeaderDiv.querySelectorAll("a.show-hide").forEach(a => {
+        a.textContent = "Show";
+        a.dataset.opened = "false";
+    });
+    if (!divOpened) {
+        div.textContent = "Hide";
+        div.dataset.opened = "true";
+        await openFunction();
+    }
+}
 
-async function showFullSample({genome, srx}={}) {
+function initFullInfo({type, accession, isNavigation=false}={}) {
+    if (!isNavigation) {
+        let last = STATE.fullInfo.back[STATE.fullInfo.back.length - 1];
+        let isDuplicate = last && 
+            last.type === type && 
+            last.accession.genome === accession.genome && 
+            last.accession.key === accession.key;
+        if (!isDuplicate) {
+            STATE.fullInfo.back.push({type, accession});
+            STATE.fullInfo.forward = [];
+        }
+    }
+    if (STATE.fullInfo.back.length > 100) STATE.fullInfo.back = STATE.fullInfo.back.slice(50);
+    if (STATE.fullInfo.forward.length > 100) STATE.fullInfo.forward = STATE.fullInfo.forward.slice(50);
+    let mainDiv = document.querySelector("#full-sample");
+    mainDiv.textContent = "";
+    let controlDiv = mainDiv.appendChild(document.createElement("div"));
+    controlDiv.classList.add("section");
+    if (STATE.fullInfo.back.length > 1 || STATE.fullInfo.forward.length > 0) {
+        controlDiv = controlDiv.appendChild(document.createElement("div"));
+    }
+    
+    if (STATE.fullInfo.back.length > 1) {
+        let backDiv = controlDiv.appendChild(document.createElement("a"));
+        let previous = STATE.fullInfo.back[STATE.fullInfo.back.length - 2];
+        backDiv.textContent = `← ${previous.accession.key}`;
+        backDiv.onclick = async () => {
+            let current = STATE.fullInfo.back.pop();
+            if (!current) return;
+            STATE.fullInfo.forward.push(current);
+            let previous = STATE.fullInfo.back[STATE.fullInfo.back.length - 1];
+            if (!previous) return;
+            if (previous.type === "sample") {
+                await showFullSample({...previous.accession, isNavigation: true});
+            } else if (previous.type === "target") {
+                await showTargetSummary({...previous.accession, isNavigation: true});
+            }
+        };
+    }
+    if (STATE.fullInfo.forward.length > 0) {
+        let forwardDiv = controlDiv.appendChild(document.createElement("a"));
+        if (STATE.fullInfo.back.length > 1) forwardDiv.style.marginLeft = "15px";
+        let next = STATE.fullInfo.forward[STATE.fullInfo.forward.length - 1];
+        forwardDiv.textContent = `${next.accession.key} →`;
+        forwardDiv.onclick = async () => {
+            let next = STATE.fullInfo.forward.pop();
+            if (!next) return;
+            STATE.fullInfo.back.push(next);
+            if (next.type === "sample") {
+                await showFullSample({...next.accession, isNavigation: true});
+            } else if (next.type === "target") {
+                await showTargetSummary({...next.accession, isNavigation: true});
+            }
+        };
+    }
+    return mainDiv;
+}
+
+async function showTargetSummary({genome, key, isNavigation=false}={}) {
+    let minimalName = getMinimalTargetName(key);
+    let targetsSummaries = await getTargetsSummaries({genome});
+    let summary = targetsSummaries.get(minimalName) || {};
+    let urlSearchTerm = encodeURIComponent(summary.name || "");
+
+    let div = initFullInfo({type: "target", accession: {genome, key}, isNavigation});
+    let fieldsDiv = div.appendChild(document.createElement("div"));
+    fieldsDiv.classList.add("section");
+    let linksDiv = div.appendChild(document.createElement("div"));
+    linksDiv.classList.add("section");
+    let moreInfoDiv = div.appendChild(document.createElement("div"));
+    moreInfoDiv.classList.add("section");
+
+    let [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
+    keyDiv.textContent = "Name";
+    valueDiv.textContent = `${summary.name || ""} | ${summary.full_name || ""}`;
+    if (summary.aliases || []) {
+        [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
+        keyDiv.textContent = "Aliases";
+        valueDiv.textContent = (summary.aliases || []).join(", ");
+    }
+    [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
+    keyDiv.textContent = "Classification";
+    valueDiv.textContent = summary.classification || "Unclassified";
+    [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
+    keyDiv.textContent = "Description";
+    valueDiv.textContent = summary.description || "No description available.";
+    [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
+    keyDiv.textContent = "Long Description";
+    valueDiv.textContent = summary.long_description || "No long description available.";
+
+    [keyDiv, valueDiv] = makeKeyValueDiv(linksDiv);
+    keyDiv.textContent = "Links";
+    [keyDiv, valueDiv] = makeKeyValueDiv(linksDiv);
+    keyDiv.textContent = "Go To";
+    let ncbiDiv = valueDiv.appendChild(document.createElement("a"));
+    ncbiDiv.href = `https://www.ncbi.nlm.nih.gov/gene/?term=${urlSearchTerm}`;
+    ncbiDiv.textContent = "NCBI";
+    ncbiDiv.target = "_blank";
+    let geneCardsDiv = valueDiv.appendChild(document.createElement("a"));
+    geneCardsDiv.href = `https://www.genecards.org/Search/Keyword?queryString=${urlSearchTerm}`;
+    geneCardsDiv.textContent = "GeneCards";
+    geneCardsDiv.target = "_blank";
+
+    [keyDiv, valueDiv] = makeKeyValueDiv(linksDiv);
+    keyDiv.textContent = "NCBI Gene Info";
+    {
+        let showInfoDiv = valueDiv.appendChild(document.createElement("a"));
+        showInfoDiv.textContent = "Show";
+        showInfoDiv.classList.add("show-hide");
+        let showInfo = async () => {
+            let term = key.match(/^([^(]*).*$/)[1];
+            let taxon = STATE.genome.available[genome].taxon_id;
+            let url = `https://api.ncbi.nlm.nih.gov/datasets/v2/gene/symbol/${term}/taxon/${taxon}/dataset_report`;
+            let responseData;
+            try {
+                let response = await fetchUrl(url);
+                responseData = await response.json();
+                if (!(responseData.reports || [])) throw new Error("No reports");
+                responseData = responseData.reports[0].gene;
+            } catch (e) {
+                let [itemKeyDiv, itemValueDiv] = makeKeyValueDiv(moreInfoDiv);
+                itemKeyDiv.textContent = "Error";
+                itemValueDiv.textContent = `No NCBI gene info ${term}`;
+                return;
+            }
+            let [itemKeyDiv, itemValueDiv] = makeKeyValueDiv(moreInfoDiv);
+            itemKeyDiv.textContent = "Gene ID";
+            itemValueDiv.textContent = responseData.gene_id;
+            [itemKeyDiv, itemValueDiv] = makeKeyValueDiv(moreInfoDiv);
+            itemKeyDiv.textContent = "Symbol";
+            itemValueDiv.textContent = responseData.symbol;
+            [itemKeyDiv, itemValueDiv] = makeKeyValueDiv(moreInfoDiv);
+            itemKeyDiv.textContent = "Synonyms";
+            itemValueDiv.textContent = responseData.synonyms.join(", ");
+            [itemKeyDiv, itemValueDiv] = makeKeyValueDiv(moreInfoDiv);
+            itemKeyDiv.textContent = "Description";
+            itemValueDiv.textContent = responseData.description;
+            [itemKeyDiv, itemValueDiv] = makeKeyValueDiv(moreInfoDiv);
+            itemKeyDiv.textContent = "Summary";
+            itemValueDiv.textContent = responseData.summary.map(x => x.description).join(" | ");
+            [itemKeyDiv, itemValueDiv] = makeKeyValueDiv(moreInfoDiv);
+            itemKeyDiv.textContent = "Molecular functions";
+            itemValueDiv.textContent = uniquesInArray(responseData.gene_ontology.molecular_functions.map(x => `${x.qualifier} ${x.name}`)).join(", ");
+            [itemKeyDiv, itemValueDiv] = makeKeyValueDiv(moreInfoDiv);
+            itemKeyDiv.textContent = "Biological processes";
+            itemValueDiv.textContent = uniquesInArray(responseData.gene_ontology.biological_processes.map(x => `${x.qualifier} ${x.name}`)).join(", ");
+            [itemKeyDiv, itemValueDiv] = makeKeyValueDiv(moreInfoDiv);
+            itemKeyDiv.textContent = "Cellular components";
+            itemValueDiv.textContent = uniquesInArray(responseData.gene_ontology.cellular_components.map(x => `${x.qualifier} ${x.name}`)).join(", ");
+        }
+        showInfoDiv.onclick = () => toggleMoreInfo(linksDiv, moreInfoDiv, showInfoDiv, showInfo);
+    }
+    
+}
+
+
+async function showFullSample({genome, key, isNavigation=false}={}) {
+    let srx = key;
     let data = (await getDatabase({genome}));
     data = data.filter(x => x[2][0] === srx);
     if (data.length !== 1) throw new Error(`${srx} found 0 or multiple times in full database.`);
@@ -742,8 +937,7 @@ async function showFullSample({genome, srx}={}) {
     data[8] = data[8] === "?" ? [] : data[8].split(",");
     data[9] = data[9].split(";").map(x => x.split("="));
 
-    let div = document.getElementById("full-sample");
-    div.textContent = "";
+    let div = initFullInfo({type: "sample", accession: {genome, key}, isNavigation});
     let fieldsDiv = div.appendChild(document.createElement("div"));
     fieldsDiv.classList.add("section", "fields");
     let attributesDiv = div.appendChild(document.createElement("div"));
@@ -754,21 +948,9 @@ async function showFullSample({genome, srx}={}) {
     summaryDiv.classList.add("section", "summary");
     let linksDiv = div.appendChild(document.createElement("div"));
     linksDiv.classList.add("section", "links");
-    let moreInfoHeaderDiv = div.appendChild(document.createElement("div"));
-    moreInfoHeaderDiv.classList.add("section", "more-info-header");
     let moreInfoDiv = div.appendChild(document.createElement("div"));
     moreInfoDiv.classList.add("section", "more-info");
 
-    let makeKeyValueDiv = (parent, {fieldClasses=[]}={}) => {
-        let fieldDiv = parent.appendChild(document.createElement("div"));
-        for (let fieldClass of fieldClasses) {
-            fieldDiv.classList.add(fieldClass);
-        }
-        fieldDiv.classList.add("key-value-pair");
-        let keyDiv = fieldDiv.appendChild(document.createElement("div"));
-        let valueDiv = fieldDiv.appendChild(document.createElement("div"));
-        return [keyDiv, valueDiv];
-    };
     let [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
     keyDiv.textContent = "GSE";
     valueDiv.textContent = data[0];
@@ -830,24 +1012,29 @@ async function showFullSample({genome, srx}={}) {
     }
 
     let minimalName = getMinimalTargetName(data[5]);
-    let targetsSummaries = await getTargetsSummaries({genome: document.querySelector("#genome").textContent});
+    let targetsSummaries = await getTargetsSummaries({genome});
     let targetSummary = targetsSummaries.get(minimalName) || {};
     [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
     keyDiv.textContent = "Target Summary";
     [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
     keyDiv.textContent = "Name";
-    valueDiv.textContent = `${targetSummary.name} | ${(targetSummary.aliases || [])[0]}`;
-    if ((targetSummary.aliases || []).length > 1) {
+    valueDiv.textContent = `${targetSummary.name || ""} | ${targetSummary.full_name || ""}`;
+    if (targetSummary.aliases || []) {
         [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
         keyDiv.textContent = "Aliases";
-        valueDiv.textContent = targetSummary.aliases.slice(1).join(", ");
+        valueDiv.textContent = (targetSummary.aliases || []).join(", ");
     }
     [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
     keyDiv.textContent = "Classification";
     valueDiv.textContent = targetSummary.classification || "Unclassified";
     [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
-    keyDiv.textContent = "Summary";
-    valueDiv.textContent = targetSummary.summary || "No summary available.";
+    keyDiv.textContent = "Description";
+    let targetDescriptionDiv = valueDiv.appendChild(document.createElement("span"));
+    let targetDescriptionTextDiv = targetDescriptionDiv.appendChild(document.createElement("span"));
+    targetDescriptionTextDiv.textContent = (targetSummary.description || "No description available.") + " ";
+    let targetDescriptionExpandDiv = targetDescriptionDiv.appendChild(document.createElement("a"));
+    targetDescriptionExpandDiv.textContent = "Expand";
+    targetDescriptionExpandDiv.onclick = () => showTargetSummary({genome, key: targetSummary.name});
 
     [keyDiv, valueDiv] = makeKeyValueDiv(linksDiv);
     keyDiv.textContent = "Links";
@@ -923,28 +1110,14 @@ async function showFullSample({genome, srx}={}) {
     genecardsDiv.href = `https://www.genecards.org/Search/Keyword?queryString=${encodeURIComponent(genecardsTerm)}`;
     genecardsDiv.textContent = genecardsTerm;
     genecardsDiv.target = "_blank";
-
-    let toggleMoreInfo = async (div, openFunction) => {
-        let divOpened = div.dataset.opened === "true";
-        moreInfoDiv.textContent = "";
-        moreInfoHeaderDiv.querySelectorAll("a").forEach(a => {
-            a.textContent = "Show";
-            a.dataset.opened = "false";
-        });
-        if (!divOpened) {
-            div.textContent = "Hide";
-            div.dataset.opened = "true";
-            await openFunction();
-        }
-    };
-
-    [keyDiv, valueDiv] = makeKeyValueDiv(moreInfoHeaderDiv);
+    [keyDiv, valueDiv] = makeKeyValueDiv(linksDiv);
     keyDiv.textContent = "GEO Submission";
     if (data[1] === "?") {
         valueDiv.textContent = "Not available";
     } else {
         let showInfoDiv = valueDiv.appendChild(document.createElement("a"));
         showInfoDiv.textContent = "Show";
+        showInfoDiv.classList.add("show-hide");
         let showInfo = async () => {
             let gsmInfo = await getGSMInfo({gsm: data[1]});
             for (let [infoKey, infoValue] of gsmInfo) {
@@ -957,72 +1130,11 @@ async function showFullSample({genome, srx}={}) {
                 valueDiv.textContent = infoValue;
             }
         }
-        showInfoDiv.onclick = () => toggleMoreInfo(showInfoDiv, showInfo);
+        showInfoDiv.onclick = () => toggleMoreInfo(linksDiv, moreInfoDiv, showInfoDiv, showInfo);
     }
-
-    [keyDiv, valueDiv] = makeKeyValueDiv(moreInfoHeaderDiv);
-    keyDiv.textContent = "NCBI Gene Info";
-    {
-        let showInfoDiv = valueDiv.appendChild(document.createElement("a"));
-        showInfoDiv.textContent = "Show";
-        let showInfo = async () => {
-            let term = data[5].match(/^([^(]*).*$/)[1];
-            let genome = document.querySelector("#genome").textContent;
-            let taxon = STATE.databaseGenomes[genome].taxon_id;
-            let url = `https://api.ncbi.nlm.nih.gov/datasets/v2/gene/symbol/${term}/taxon/${taxon}/dataset_report`;
-            let response = await fetchUrl(url);
-            let responseData = await response.json();
-            if (responseData.reports == null) return;
-            responseData = responseData.reports[0].gene;
-            let [itemKeyDiv, itemValueDiv] = makeKeyValueDiv(moreInfoDiv);
-            itemKeyDiv.textContent = "Gene ID";
-            itemValueDiv.textContent = responseData.gene_id;
-            [itemKeyDiv, itemValueDiv] = makeKeyValueDiv(moreInfoDiv);
-            itemKeyDiv.textContent = "Symbol";
-            itemValueDiv.textContent = responseData.symbol;
-            [itemKeyDiv, itemValueDiv] = makeKeyValueDiv(moreInfoDiv);
-            itemKeyDiv.textContent = "Synonyms";
-            itemValueDiv.textContent = responseData.synonyms.join(", ");
-            [itemKeyDiv, itemValueDiv] = makeKeyValueDiv(moreInfoDiv);
-            itemKeyDiv.textContent = "Description";
-            itemValueDiv.textContent = responseData.description;
-            [itemKeyDiv, itemValueDiv] = makeKeyValueDiv(moreInfoDiv);
-            itemKeyDiv.textContent = "Summary";
-            itemValueDiv.textContent = responseData.summary.map(x => x.description).join(" | ");
-            [itemKeyDiv, itemValueDiv] = makeKeyValueDiv(moreInfoDiv);
-            itemKeyDiv.textContent = "Molecular functions";
-            itemValueDiv.textContent = uniquesInArray(responseData.gene_ontology.molecular_functions.map(x => `${x.qualifier} ${x.name}`)).join(", ");
-            [itemKeyDiv, itemValueDiv] = makeKeyValueDiv(moreInfoDiv);
-            itemKeyDiv.textContent = "Biological processes";
-            itemValueDiv.textContent = uniquesInArray(responseData.gene_ontology.biological_processes.map(x => `${x.qualifier} ${x.name}`)).join(", ");
-            [itemKeyDiv, itemValueDiv] = makeKeyValueDiv(moreInfoDiv);
-            itemKeyDiv.textContent = "Cellular components";
-            itemValueDiv.textContent = uniquesInArray(responseData.gene_ontology.cellular_components.map(x => `${x.qualifier} ${x.name}`)).join(", ");
-        }
-        showInfoDiv.onclick = () => toggleMoreInfo(showInfoDiv, showInfo);
-    }
-    
-
 
 }
 
-async function setGenome({genome}={}) {
-    let genomeControl = document.querySelector("#genome-control");
-    let genomeChoice = genomeControl.querySelector("#genome");
-    let genomeChoices = genomeControl.querySelectorAll("a");
-    let allGenomes = await getDatabaseGenomes();
-    if (allGenomes[genome] == null) return;
-    genomeChoices.forEach(a => a.remove());
-    for (let choice of Object.keys(allGenomes).toSorted()) {
-        if (choice === genome) continue;
-        let a = genomeControl.appendChild(document.createElement("a"));
-        a.textContent = choice;
-        a.onclick = async () => { await setGenome({genome: choice}) };
-    }
-    if (genome === genomeChoice.textContent) return;
-    genomeChoice.textContent = genome;
-    await searchSamples();
-}
 
 
 async function getGSMInfo({gsm}={}) {
@@ -1063,7 +1175,7 @@ async function main() {
         };
     }
 
-    await setGenome({genome: document.querySelector("#genome").textContent});
+    await getDatabaseGenomes();
     await searchSamples();
 
 }
