@@ -12,22 +12,25 @@
         <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible+Mono:ital,wght@0,200..800;1,200..800&family=Atkinson+Hyperlegible+Next:ital,wght@0,200..800;1,200..800&display=swap" rel="stylesheet">
 
         <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
+        
+        <script async src="https://cdn.jsdelivr.net/npm/markdown-it@14.1.0/dist/markdown-it.min.js"></script>
 
         <style>
             html { -webkit-text-size-adjust: 100%; }
             body { padding: 0; margin: 0; }
             
             :root {
+                --font-size: 13px;
                 --font-family: "Roboto Flex", system-ui, sans-serif;
                 --font-family-mono: "Roboto Mono", ui-monospace, monospace;
                 --font-family-condensed: "Roboto Condensed", system-ui, sans-serif;
                 --accent-color: oklch(58.8% 0.158 241.966);
                 --desaturated-color: oklch(70.7% 0.022 261.325);
+                --highly-desaturated-color: oklch(92.8% 0.006 264.531);
                 --desaturated-accent-color: oklch(70.711% 0.09331 247.43);
             }
 
             .material-symbols-outlined {
-                font-size: 100%;
                 font-variation-settings:
                 'FILL' 0,
                 'wght' 400,
@@ -37,7 +40,7 @@
 
             main {
                 font-family: var(--font-family);
-                font-size: 13px;
+                font-size: var(--font-size);
             }
 
             a {
@@ -55,6 +58,24 @@
             }
             a.desaturated-color {
                 color: var(--desaturated-accent-color);
+            }
+
+            .markdown h3 {
+                font-size: var(--font-size);
+            }
+            .markdown ul, .markdown ol {
+                padding-inline-start: 1.5em;
+            }
+            .markdown h3, .markdown p, .markdown ul, .markdown ol {
+                margin-block-start: 5px;
+                margin-block-end: 5px;
+            }
+            .markdown h3:not(:first-child) {
+                margin-block-start: 10px;
+            }
+            .markdown > :first-child, .markdown > :last-child {
+                margin-block-start: 0px;
+                margin-block-end: 0px;
             }
 
             .appear-smoothly {
@@ -80,10 +101,12 @@
             .checkbox[data-checked="true"]::before {
                 font-family: "Material Symbols Outlined";
                 content: "radio_button_checked";
+                font-size: 95%;
             }
             .checkbox:not([data-checked="true"])::before {
                 font-family: "Material Symbols Outlined";
                 content: "radio_button_unchecked";
+                font-size: 95%;
             }
 
             .symbol-left, .symbol-right {
@@ -95,11 +118,13 @@
                 content: attr(data-symbol);
                 font-family: "Material Symbols Outlined";
                 padding-right: 3px;
+                font-size: 95%;
             }
             .symbol-right::after {
                 content: attr(data-symbol);
                 font-family: "Material Symbols Outlined";
                 padding-left: 3px;
+                font-size: 95%;
             }
             .symbol-left.symbol-colored::before, .symbol-right.symbol-colored::after {
                 color: var(--accent-color);
@@ -204,7 +229,7 @@
                 display: grid;
                 grid-template-columns: max-content auto max-content;
                 column-gap: 10px;
-                border-bottom: 1px solid oklch(92.8% 0.006 264.531);
+                border-bottom: 1px solid var(--highly-desaturated-color);
                 padding-bottom: 3px;
             }
 
@@ -217,28 +242,41 @@
                 outline: none;
             }
 
-            #targets-lists {
-                padding: 20px;
+            #listing {
                 overflow-y: auto;
+                display: flex;
+                flex-direction: column;
+            }
+            #listing > div:nth-child(1) {
+                display: flex;
+                flex-direction: row;
+                gap: 15px;
+                padding: 20px;
+                border-bottom: 1px solid black;
+                position: sticky;
+                top: 0;
+                background: white;
+            }
+            #listing > div:nth-child(2) {
                 display: flex;
                 flex-direction: column;
                 gap: 15px;
                 word-break: break-word;
+                padding: 20px;
             }
-
-            #targets-lists > div {
+            #listing > div:nth-child(2) > div {
                 display: flex;
                 flex-direction: column;
                 gap: 3px;
             }
-            #targets-lists > div :empty {
+            #listing > div:nth-child(2) > div :empty {
                 display: none;
             }
-            #targets-lists > div > :nth-child(1) > :nth-child(1) {
+            #listing > div:nth-child(2) > div > :nth-child(1) > :nth-child(1) {
                 font-weight: bold;
                 margin-right: 10px;
             }
-            #targets-lists > div > :nth-child(2) {
+            #listing > div:nth-child(2) > div > :nth-child(2) {
                 font-size: 10px;
                 color: var(--desaturated-color);
             }
@@ -246,12 +284,25 @@
             #full-sample {
                 display: flex;
                 flex-direction: column;
-                gap: 15px;
-                padding: 20px;
                 border-left: 1px solid black;
                 overflow-y: auto;
             }
-
+            #full-sample > .control {
+                display: flex;
+                flex-direction: row;
+                gap: 15px;
+                padding: 20px;
+                border-bottom: 1px solid black;
+                position: sticky;
+                top: 0;
+                background: white;
+            }
+            #full-sample > .sections {
+                display: flex;
+                flex-direction: column;
+                gap: 15px;
+                padding: 20px;
+            }
             #full-sample .section {
                 display: flex;
                 flex-direction: column;
@@ -259,6 +310,11 @@
             }
             #full-sample .section:empty {
                 display: none;
+            }
+            #full-sample .section:not(:first-child)::before {
+                content: "";
+                border-bottom: 1px solid var(--highly-desaturated-color);
+                margin-bottom: 10px;
             }
 
             #full-sample .key-value-pair > div:first-child {
@@ -271,6 +327,9 @@
             }
             #full-sample .key-value-pair > div:nth-child(2) > :not(:last-child) {
                 margin-right: 10px;
+            }
+            #full-sample .key-value-pair > div:empty {
+                display: none;
             }
 
 
@@ -296,8 +355,8 @@
                             <div>Search in:</div>
                             <div class="checkbox" data-checked="true" data-indexes="0,1,2">IDs</div>
                             <div class="checkbox" data-checked="true" data-indexes="5">Target</div>
-                            <div class="checkbox" data-checked="true" data-indexes="10">Aliases</div>
                             <div class="checkbox" data-checked="true" data-indexes="4">Cell</div>
+                            <div class="checkbox" data-checked="true" data-indexes="10,11">Aliases</div>
                             <div class="checkbox" data-indexes="6">Date</div>
                             <div class="checkbox" data-indexes="7">Title</div>
                             <div class="checkbox" data-indexes="9">Attributes</div>
@@ -308,7 +367,7 @@
                             <div id="search-count"></div>
                         </div>
                     </div>
-                    <div id="targets-lists"></div>
+                    <div id="listing"></div>
                     <div id="full-sample"></div>
                 </div>
             </div>
@@ -324,11 +383,14 @@ let STATE = {
     genome: {selected: "mm10", available: null},
     database: {},
     targetsSummaries: {},
-    aliasesInserted: {},
+    cellsSummaries: {},
+    targetsAliasesInserted: {},
+    cellsAliasesInserted: {},
     display: {
         summaries: true,
         sampleCount: 500,
-        targetCount: 500,
+        listingCount: 500,
+        listing: "targets",
     },
     fullInfo: {back: [], forward: []},
     sort: {by: 6, reverse: true},
@@ -405,106 +467,161 @@ async function databaseControl(key) {
 }
 
 
-function getMinimalTargetName(name) {
+function getEntryTargetName(name) {
     return name.toLowerCase().match(/^([^(]*).*$/)[1].replace(/[^\w()]+/g, "");
 }
 
 
 async function getTargetsSummaries({genome}={}) {
     if (STATE.targetsSummaries[genome] != null) return STATE.targetsSummaries[genome];
-    let url = `${BASE_URL}/summaries/${genome}.json.gz`;
-    let data = {};
-    try {
-        let response = await fetchUrl(url, {decompress: "gzip"});
-        data = await response.json();
-    } catch (e) {
-        console.error(`No summaries for genome ${genome}`);
-    }
-    let targetsSummaries = new Map();
-    for (let [name, entryData] of Object.entries(data)) {
-        let minimalName = getMinimalTargetName(name);
-        entryData.name = name;
-        entryData.minimalName = minimalName;
-        let pattern = /\*([\w #!/|\\"'<>.,;:=-]*)\*/g;
-        entryData.description = entryData.description.replace(pattern, "$1");
-        entryData.long_description = entryData.long_description.replace(pattern, "$1");
-        entryData.aliases = entryData.aliases
-            .filter(alias => getMinimalTargetName(alias) !== minimalName);
-        targetsSummaries.set(minimalName, entryData);
-    }
-    if (!STATE.aliasesInserted[genome]) {
-        let database = await getDatabase({genome});
-        for (let entry of database) {
-            let minimalName = getMinimalTargetName(entry[5][0]);
-            let summary = targetsSummaries.get(minimalName);
-            if (!summary) continue;
-            let aliases = [summary.name, summary.full_name, ...summary.aliases]
-                .map(getMinimalTargetName);
-            entry[10][1] = (entry[10][1] ? entry[10][1] + " " : "") + aliases.join(" ");            
+    STATE.targetsSummaries[genome] = new Promise(async (resolve, reject) => {
+        try {
+            let url = `${BASE_URL}/summaries/targets/${genome}.json.gz`;
+            let data = {};
+            try {
+                let response = await fetchUrl(url, {decompress: "gzip"});
+                data = await response.json();
+            } catch (e) {
+                console.error(`No targets summaries for genome ${genome}`);
+            }
+            let targetsSummaries = new Map();
+            for (let [name, entryData] of Object.entries(data)) {
+                let minimalName = getEntryTargetName(name);
+                entryData.name = name;
+                entryData.minimalName = minimalName;
+                entryData.aliases = entryData.aliases
+                    .filter(alias => getEntryTargetName(alias) !== minimalName);
+                targetsSummaries.set(minimalName, entryData);
+            }
+            if (!STATE.targetsAliasesInserted[genome]) {
+                let database = await getDatabase({genome});
+                for (let entry of database) {
+                    let minimalName = getEntryTargetName(entry[5][0]);
+                    let summary = targetsSummaries.get(minimalName);
+                    if (!summary) continue;
+                    let aliases = [summary.name, summary.full_name, ...summary.aliases]
+                        .map(getEntryTargetName);
+                    entry[10][1] = (entry[10][1] ? entry[10][1] + " " : "") + aliases.join(" ");            
+                }
+                STATE.targetsAliasesInserted[genome] = true;
+            }
+            resolve(targetsSummaries);
+        } catch (e) {
+            reject(e);
         }
-        STATE.aliasesInserted[genome] = true;
-    }
-    STATE.targetsSummaries[genome] = targetsSummaries;
-    return targetsSummaries;
+    });
+    return STATE.targetsSummaries[genome];
 }
 
 
-async function getDatabaseGenomes() {
-    if (STATE.genome.available) return STATE.genome.available;
-    //let response = await fetch("/data-server/v2/chip-atlas/get-database-genomes");
-    let url = `${BASE_URL}/database/genomes.json`;
-    let response = await fetchUrl(url);
-    let data = await response.json();
-    STATE.genome.available = data;
+async function getCellsSummaries({genome}={}) {
+    if (STATE.cellsSummaries[genome] != null) return STATE.cellsSummaries[genome];
+    STATE.cellsSummaries[genome] = new Promise(async (resolve, reject) => {
+        try {
+            let url = `${BASE_URL}/summaries/cells/${genome}.json.gz`;
+            let data = {};
+            try {
+                let response = await fetchUrl(url, {decompress: "gzip"});
+                data = await response.json();
+            } catch (e) {
+                console.error(`No cells summaries for genome ${genome}`);
+            }
+            let cellsSummaries = new Map();
+            for (let [name, entryData] of Object.entries(data)) {
+                let minimalName = getEntryTargetName(name);
+                entryData.name = name;
+                entryData.minimalName = minimalName;
+                entryData.aliases = entryData.aliases
+                    .filter(alias => getEntryTargetName(alias) !== minimalName);
+                cellsSummaries.set(minimalName, entryData);
+            }
+            if (!STATE.cellsAliasesInserted[genome]) {
+                let database = await getDatabase({genome});
+                for (let entry of database) {
+                    let minimalName = getEntryTargetName(entry[4][0]);
+                    let summary = cellsSummaries.get(minimalName);
+                    if (!summary) continue;
+                    let aliases = [summary.name, summary.full_name, ...summary.aliases]
+                        .map(getEntryTargetName);
+                    entry[11][1] = (entry[11][1] ? entry[11][1] + " " : "") + aliases.join(" ");            
+                }
+                STATE.cellsAliasesInserted[genome] = true;
+            }
+            resolve(cellsSummaries);
+        } catch (e) {
+            reject(e);
+        }
+    });
+    return STATE.cellsSummaries[genome];
+}
 
-    let genomeControl = document.querySelector("#genome-control");
-    genomeControl.querySelectorAll(".checkbox").forEach(e => e.remove());
-    for (let choice of Object.keys(data).toSorted()) {
-        let div = genomeControl.appendChild(document.createElement("div"));
-        div.textContent = choice;
-        div.classList.add("checkbox");
-        div.dataset.checked = (choice === STATE.genome.selected ? "true" : "false");
-        div.onclick = async () => {
-            if (div.dataset.checked === "true") return;
-            genomeControl.querySelectorAll(".checkbox").forEach(e => e.dataset.checked = "false");
-            div.dataset.checked = "true";
-            STATE.genome.selected = choice;
-            await searchSamples();
-        };
-    }
+
+async function getAvailableGenomes() {
+    if (STATE.genome.available) return STATE.genome.available;
+    STATE.genome.available = new Promise(async (resolve, reject) => {
+        try {
+            let url = `${BASE_URL}/database/genomes.json`;
+            let response = await fetchUrl(url);
+            let data = await response.json();
+
+            let genomeControl = document.querySelector("#genome-control");
+            genomeControl.querySelectorAll(".checkbox").forEach(e => e.remove());
+            for (let choice of Object.keys(data).toSorted()) {
+                let div = genomeControl.appendChild(document.createElement("div"));
+                div.textContent = choice;
+                div.classList.add("checkbox");
+                div.dataset.checked = (choice === STATE.genome.selected ? "true" : "false");
+                div.onclick = async () => {
+                    if (div.dataset.checked === "true") return;
+                    genomeControl.querySelectorAll(".checkbox").forEach(e => e.dataset.checked = "false");
+                    div.dataset.checked = "true";
+                    STATE.genome.selected = choice;
+                    await searchSamples();
+                };
+            }
+            resolve(data);
+        } catch (e) {
+            reject(e);
+        }
+    });
+    return STATE.genome.available;
 }
 
 
 async function getDatabase({genome}={}) {
     genome = genome.toLowerCase();
     if (STATE.database[genome]) return STATE.database[genome];
-    //let response = await fetch(`/data-server/v2/chip-atlas/get-database?genome=${genome}&full=${full}`);
-    //if (!response.ok) throw new Error(response);
-    //let data = await response.text();
-    let file = `${genome}.full.tsv.gz`;
-    let url = `${BASE_URL}/database/genomes/${file}`;
-    let response = await fetchUrl(url, {decompress: "gzip"});
-    let data = await response.text();
-    data = data
-        .trimEnd().split("\n")
-        .map(line => line.split("\t"))
-        .map(line => line.length < 11 ? line.concat(Array(11 - line.length).fill("")) : line)
-        .map(line => line.map((entry, index) => {
-            if (index === 9) {
-                entry = [entry, entry
-                    .toLowerCase()
-                    .split(";")
-                    .map(x => x.split("=").map(y => y.replace(/[^\w()]+/g, "")))
-                    .flat()
-                    .join(" ")
-                ];
-            } else {
-                entry = [entry, entry.toLowerCase().replace(/[^\w()]+/g, "")];
-            }
-            return entry;
-        }));
-    STATE.database[genome] = data;
-    return data;
+    STATE.database[genome] = new Promise(async (resolve, reject) => {
+        try {
+            let file = `${genome}.full.tsv.gz`;
+            let url = `${BASE_URL}/database/genomes/${file}`;
+            let response = await fetchUrl(url, {decompress: "gzip"});
+            let data = await response.text();
+            // 12 -> 2 others columns may be added at the end for targets and cells aliases
+            data = data
+                .trimEnd().split("\n")
+                .map(line => line.split("\t"))
+                .map(line => line.length < 12 ? line.concat(Array(12 - line.length).fill("")) : line)
+                .map(line => line.map((entry, index) => {
+                    if (index === 9) {
+                        entry = [entry, entry
+                            .toLowerCase()
+                            .split(";")
+                            .map(x => x.split("=").map(y => y.replace(/[^\w()]+/g, "")))
+                            .flat()
+                            .join(" ")
+                        ];
+                    } else {
+                        entry = [entry, entry.toLowerCase().replace(/[^\w()]+/g, "")];
+                    }
+                    return entry;
+                }));
+                resolve(data);
+        } catch (e) {
+            reject(e);
+        }
+    });
+    return STATE.database[genome];
 }
 
 
@@ -524,6 +641,7 @@ async function updateSamplesList({genome, database}={}) {
         if (STATE.sort.by === Number(div.dataset.sortIndex)) {
             div.children[1].textContent = STATE.sort.reverse ? "keyboard_arrow_down" : "keyboard_arrow_up";
             div.children[1].style.fontFamily = "Material Symbols Outlined";
+            div.children[1].style.fontSize = "95%";
         }
         div.onclick = () => {
             if (STATE.sort.by === Number(div.dataset.sortIndex)) {
@@ -558,7 +676,8 @@ async function updateSamplesList({genome, database}={}) {
         }
 
         itemDivs[0][0].textContent = sample[6][0];
-        itemDivs[0][1].textContent = "+ Expand data";
+        itemDivs[0][1].textContent = "+ Expand";
+        itemDivs[0][1].style.color = "var(--desaturated-accent-color)";
         itemDivs[0][0].onclick = () => showFullSample({genome, key: sample[2][0]});
         itemDivs[0][1].onclick = () => showFullSample({genome, key: sample[2][0]});
         itemDivs[1][0].textContent = sample[0][0];
@@ -587,7 +706,12 @@ async function updateSamplesList({genome, database}={}) {
 
 async function searchSamples() {
     let genome = STATE.genome.selected;
-    let database = await getDatabase({genome});
+    let database = getDatabase({genome});
+    let targetsSummaries = getTargetsSummaries({genome});
+    let cellsSummaries = getCellsSummaries({genome});
+    database = await database;
+    targetsSummaries = await targetsSummaries;
+    cellsSummaries = await cellsSummaries;
     let queryString = document.querySelector("#search").textContent;
     let searchFieldsIndexes = Array.from(document.querySelectorAll("#search-fields-control > div[data-checked='true']"))
         .map(div => div.dataset.indexes.split(",").map(Number))
@@ -692,10 +816,9 @@ async function searchSamples() {
         return false;
     };
     
-    // Get targets summaries
-    let targetsListsDiv = document.getElementById("targets-lists");
-    targetsListsDiv.textContent = "";
-    let targetsSummaries = await getTargetsSummaries({genome});
+    // initialize targets and cells list
+    let listingDiv = document.querySelector("#listing");
+    listingDiv.textContent = "";
 
     // Parse the query string
     queryString = queryString.trim();
@@ -724,47 +847,139 @@ async function searchSamples() {
         results.sort((a, b) => sortFn(a[STATE.sort.by][0], b[STATE.sort.by][0]));
     }
 
-    // Update targets list
-    let uniqueTargets = new Map();
-    for (let entry of results) {
-        uniqueTargets.set(entry[5][0], entry);
-    }
-    uniqueTargets = Array.from(uniqueTargets.values());
-    for (let entry of uniqueTargets.slice(0, 1000)) {
-        let div = targetsListsDiv.appendChild(document.createElement("div"));
-        let entryNameDiv = div.appendChild(document.createElement("div"));
-        let entrySummaryDiv = div.appendChild(document.createElement("div"));
-
-        let minimalName = getMinimalTargetName(entry[5][1]);
-        let summary = targetsSummaries.get(minimalName) || {};
-
-        let entryLabelDiv = entryNameDiv.appendChild(document.createElement("span"));
-        entryLabelDiv.textContent = summary.name || entry[5][0];
-        let entryAliasesDiv = entryNameDiv.appendChild(document.createElement("span"));
-        entryAliasesDiv.textContent = [summary.full_name || "", ...(summary.aliases || [])]
-            .filter(x => x.length > 0)
-            .map(alias => alias.trim())
-            .join(", ");
-
-        if (STATE.display.summaries) {
-            let classDiv = entrySummaryDiv.appendChild(document.createElement("span"));
-            classDiv.textContent = (summary.classification || "Unclassified") + ".";
-            classDiv.style.fontWeight = "bold";
-            entrySummaryDiv.appendChild(document.createElement("span")).textContent = " ";
-            let descriptionDiv = entrySummaryDiv.appendChild(document.createElement("span"));
-            descriptionDiv.textContent = summary.description || "No summary available.";
-            descriptionDiv.appendChild(document.createElement("span")).textContent = " ";
-            
-            let entryExpandDiv = entrySummaryDiv.appendChild(document.createElement("a"));
-            entryExpandDiv.onclick = () => showTargetSummary({genome, key: summary.name});
-            entryExpandDiv.textContent = "Expand";
-            entryExpandDiv.classList.add("desaturated-color");
+    // Update listing controls
+    let uniques = {};
+    let listingControlDiv = listingDiv.appendChild(document.createElement("div"));
+    for (let [label, value, entryIndex] of [["GSEs", "gse", 0], ["Targets", "targets", 5], ["Cells", "cells", 4]]) {
+        uniques[value] = new Map();
+        for (let entry of results) {
+            uniques[value].set(entry[entryIndex][0], entry);
         }
+        let div = listingControlDiv.appendChild(document.createElement("div"));
+        div.textContent = `${label} (${formatNumber(uniques[value].size, {thousands: ","})})`;
+        div.classList.add("symbol-left", "symbol-colored");
+        div.dataset.symbol = (STATE.display.listing === value) ? "radio_button_checked" : "radio_button_unchecked";
+        div.onclick = async () => {
+            STATE.display.listing = value;
+            await searchSamples();
+        };
     }
+    let listingListDiv = listingDiv.appendChild(document.createElement("div"));
 
-    if (uniqueTargets.length > STATE.display.targetCount) {
-        let div = targetsListsDiv.appendChild(document.createElement("div"));
-        let moreCount = formatNumber(uniqueTargets.length - STATE.display.targetCount, {thousands: ","})
+    // Update listing list
+    if (STATE.display.listing === "targets") {
+        uniques["targets"] = Array.from(uniques["targets"].values());
+        for (let entry of uniques["targets"].slice(0, STATE.display.listingCount)) {
+            let div = listingListDiv.appendChild(document.createElement("div"));
+            let entryNameDiv = div.appendChild(document.createElement("div"));
+            let entrySummaryDiv = div.appendChild(document.createElement("div"));
+
+            let minimalName = getEntryTargetName(entry[5][1]);
+            let summary = targetsSummaries.get(minimalName) || {};
+
+            let entryLabelDiv = entryNameDiv.appendChild(document.createElement("span"));
+            entryLabelDiv.textContent = summary.name || entry[5][0];
+            let entryAliasesDiv = entryNameDiv.appendChild(document.createElement("span"));
+            entryAliasesDiv.textContent = [summary.full_name || "", ...(summary.aliases || [])]
+                .filter(x => x.length > 0)
+                .map(alias => alias.trim())
+                .join(", ");
+
+            if (STATE.display.summaries) {
+                let classDiv = entrySummaryDiv.appendChild(document.createElement("span"));
+                classDiv.textContent = (summary.classification || "Unclassified") + ".";
+                classDiv.style.fontWeight = "bold";
+                entrySummaryDiv.appendChild(document.createElement("span")).textContent = " ";
+                let descriptionDiv = entrySummaryDiv.appendChild(document.createElement("span"));
+                descriptionDiv.textContent = summary.description || "No summary available.";
+                descriptionDiv.appendChild(document.createElement("span")).textContent = " ";
+                
+                let entryExpandDiv = entrySummaryDiv.appendChild(document.createElement("a"));
+                entryExpandDiv.onclick = () => showTargetSummary({genome, key: summary.name});
+                entryExpandDiv.textContent = "Expand";
+                entryExpandDiv.classList.add("desaturated-color");
+            }
+        }
+    } else if (STATE.display.listing === "cells") {
+        uniques["cells"] = Array.from(uniques["cells"].values());
+        for (let entry of uniques["cells"].slice(0, STATE.display.listingCount)) {
+            let div = listingListDiv.appendChild(document.createElement("div"));
+            let entryNameDiv = div.appendChild(document.createElement("div"));
+            let entrySummaryDiv = div.appendChild(document.createElement("div"));
+
+            let minimalName = getEntryTargetName(entry[4][1]);
+            let summary = cellsSummaries.get(minimalName) || {};
+
+            let entryLabelDiv = entryNameDiv.appendChild(document.createElement("span"));
+            entryLabelDiv.textContent = entry[4][0].match(/^([^(]*).*$/)[1];
+            let entryTissueDiv = entryNameDiv.appendChild(document.createElement("span"));
+            entryTissueDiv.textContent = (entry[4][0].match(/^[^(]*\(([^(]*)\)$/) || ["", ""])[1];
+
+            if (STATE.display.summaries) {
+                let classDiv = entrySummaryDiv.appendChild(document.createElement("span"));
+                let classContent = [
+                    summary.classification || "Unclassified",
+                    summary.tissue || "",
+                    summary.organ || "",
+                ]
+                classContent = classContent.filter(x => x.length > 0).join(" | ");
+                classDiv.textContent = classContent + ".";
+                classDiv.style.fontWeight = "bold";
+                entrySummaryDiv.appendChild(document.createElement("span")).textContent = " ";
+                let descriptionDiv = entrySummaryDiv.appendChild(document.createElement("span"));
+                descriptionDiv.textContent = summary.description || "No summary available.";
+                descriptionDiv.appendChild(document.createElement("span")).textContent = " ";
+                
+                let entryExpandDiv = entrySummaryDiv.appendChild(document.createElement("a"));
+                entryExpandDiv.onclick = () => showCellSummary({genome, key: entry[4][0].match(/^([^(]*).*$/)[1].trim()});
+                entryExpandDiv.textContent = "Expand";
+                entryExpandDiv.classList.add("desaturated-color");
+            }
+        }
+        
+    } else if (STATE.display.listing === "gse") {
+        let resultsByGse = new Map();
+        for (let entry of results) {
+            let gse = entry[0][0];
+            if (!uniques["gse"].has(gse)) break;
+            if (!resultsByGse.has(gse)) resultsByGse.set(gse, []);
+            resultsByGse.get(gse).push(entry);
+            if (resultsByGse.size >= STATE.display.listingCount) break;
+        }
+        uniques["gse"] = Array.from(uniques["gse"].values());
+        for (let [gse, entries] of resultsByGse) {
+            let div = listingListDiv.appendChild(document.createElement("div"));
+            let gseDiv = div.appendChild(document.createElement("div"));
+            let gseLabelDiv = gseDiv.appendChild(document.createElement("span"));
+            gseLabelDiv.textContent = gse;
+            let gseCountLinkDiv = gseDiv.appendChild(document.createElement("span"));
+            let gseCountDiv = gseCountLinkDiv.appendChild(document.createElement("span"));
+            gseCountDiv.textContent = `${formatNumber(entries.length, {thousands: ","})} samples, `;
+            let gseLinkDiv = gseCountLinkDiv.appendChild(document.createElement("a"));
+            gseLinkDiv.textContent = "go to GEO";
+            gseLinkDiv.href = `https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=${gse}`;
+            gseLinkDiv.target = "_blank";
+            gseLinkDiv.rel = "noopener noreferrer";
+
+            if (STATE.display.summaries) {
+                let detailsDiv = div.appendChild(document.createElement("div"));
+                let targetsSet = new Map();
+                let cellsSet = new Map();
+                for (let entry of entries) {
+                    targetsSet.set(entry[5][0].match(/^([^(]*).*$/)[1].trim(), null);
+                    cellsSet.set(entry[4][0].match(/^([^(]*).*$/)[1].trim(), null);
+                }
+                let targetsDiv = detailsDiv.appendChild(document.createElement("div"));
+                targetsDiv.textContent = `${targetsSet.size} targets: ${Array.from(targetsSet.keys()).join(", ")}`;
+                let cellsDiv = detailsDiv.appendChild(document.createElement("div"));
+                cellsDiv.textContent = `${cellsSet.size} cells: ${Array.from(cellsSet.keys()).join(", ")}`;
+            }
+        }
+
+    }
+    if (uniques[STATE.display.listing].length > STATE.display.listingCount) {
+        let div = listingListDiv.appendChild(document.createElement("div"));
+        let moreCount = formatNumber(uniques[STATE.display.listing].length - STATE.display.listingCount, {thousands: ","})
         div.textContent = `[ + ${moreCount} more ]`;
     }
 
@@ -813,12 +1028,9 @@ function initFullInfo({type, accession, isNavigation=false}={}) {
     let mainDiv = document.querySelector("#full-sample");
     mainDiv.textContent = "";
     let controlDiv = mainDiv.appendChild(document.createElement("div"));
-    controlDiv.classList.add("section");
-    if (STATE.fullInfo.back.length > 1 || STATE.fullInfo.forward.length > 0) {
-        controlDiv = controlDiv.appendChild(document.createElement("div"));
-        controlDiv.style.display = "flex";
-        controlDiv.style.columnGap = "15px";
-    }
+    controlDiv.classList.add("control");
+    let sectionsDiv = mainDiv.appendChild(document.createElement("div"));
+    sectionsDiv.classList.add("sections");
     
     if (STATE.fullInfo.back.length > 1) {
         let backDiv = controlDiv.appendChild(document.createElement("a"));
@@ -836,9 +1048,16 @@ function initFullInfo({type, accession, isNavigation=false}={}) {
                 await showFullSample({...previous.accession, isNavigation: true});
             } else if (previous.type === "target") {
                 await showTargetSummary({...previous.accession, isNavigation: true});
+            } else if (previous.type === "cell") {
+                await showCellSummary({...previous.accession, isNavigation: true});
             }
         };
     }
+    
+    let currentDiv = controlDiv.appendChild(document.createElement("span"));
+    currentDiv.textContent = accession.key;
+    currentDiv.style.fontWeight = "bold";
+
     if (STATE.fullInfo.forward.length > 0) {
         let forwardDiv = controlDiv.appendChild(document.createElement("a"));
         let next = STATE.fullInfo.forward[STATE.fullInfo.forward.length - 1];
@@ -856,18 +1075,20 @@ function initFullInfo({type, accession, isNavigation=false}={}) {
             }
         };
     }
-    return mainDiv;
+    return [mainDiv, controlDiv, sectionsDiv];
 }
 
 async function showTargetSummary({genome, key, isNavigation=false}={}) {
-    let minimalName = getMinimalTargetName(key);
+    let minimalName = getEntryTargetName(key);
     let targetsSummaries = await getTargetsSummaries({genome});
     let summary = targetsSummaries.get(minimalName) || {};
     let urlSearchTerm = encodeURIComponent(summary.name || "");
 
-    let div = initFullInfo({type: "target", accession: {genome, key}, isNavigation});
+    let [,, div] = initFullInfo({type: "target", accession: {genome, key}, isNavigation});
     let fieldsDiv = div.appendChild(document.createElement("div"));
     fieldsDiv.classList.add("section");
+    let longDescriptionDiv = div.appendChild(document.createElement("div"));
+    longDescriptionDiv.classList.add("section");
     let linksDiv = div.appendChild(document.createElement("div"));
     linksDiv.classList.add("section");
     let moreInfoDiv = div.appendChild(document.createElement("div"));
@@ -876,10 +1097,10 @@ async function showTargetSummary({genome, key, isNavigation=false}={}) {
     let [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
     keyDiv.textContent = "Name";
     valueDiv.textContent = `${summary.name || ""} | ${summary.full_name || ""}`;
-    if (summary.aliases || []) {
+    if ((summary.aliases || []).length > 0) {
         [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
         keyDiv.textContent = "Aliases";
-        valueDiv.textContent = (summary.aliases || []).join(", ");
+        valueDiv.textContent = summary.aliases.join(", ");
     }
     [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
     keyDiv.textContent = "Classification";
@@ -887,9 +1108,6 @@ async function showTargetSummary({genome, key, isNavigation=false}={}) {
     [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
     keyDiv.textContent = "Description";
     valueDiv.textContent = summary.description || "No description available.";
-    [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
-    keyDiv.textContent = "Long Description";
-    valueDiv.textContent = summary.long_description || "No long description available.";
 
     [keyDiv, valueDiv] = makeKeyValueDiv(linksDiv);
     keyDiv.textContent = "Links";
@@ -904,6 +1122,12 @@ async function showTargetSummary({genome, key, isNavigation=false}={}) {
     geneCardsDiv.textContent = "GeneCards";
     geneCardsDiv.target = "_blank";
 
+    [keyDiv, valueDiv] = makeKeyValueDiv(longDescriptionDiv);
+    let md = window.markdownit();
+    let result = md.render(summary.long_description || "No long description available.");
+    valueDiv.innerHTML = result;
+    valueDiv.classList.add("markdown");
+
     [keyDiv, valueDiv] = makeKeyValueDiv(linksDiv);
     keyDiv.textContent = "NCBI Gene Info";
     {
@@ -912,7 +1136,7 @@ async function showTargetSummary({genome, key, isNavigation=false}={}) {
         showInfoDiv.classList.add("show-hide");
         let showInfo = async () => {
             let term = key.match(/^([^(]*).*$/)[1];
-            let taxon = STATE.genome.available[genome].taxon_id;
+            let taxon = (await getAvailableGenomes())[genome].taxon_id;
             let url = `https://api.ncbi.nlm.nih.gov/datasets/v2/gene/symbol/${term}/taxon/${taxon}/dataset_report`;
             let responseData;
             try {
@@ -953,7 +1177,47 @@ async function showTargetSummary({genome, key, isNavigation=false}={}) {
         }
         showInfoDiv.onclick = () => toggleMoreInfo(linksDiv, moreInfoDiv, showInfoDiv, showInfo);
     }
-    
+
+}
+
+
+async function showCellSummary({genome, key, isNavigation=false}={}) {
+    let minimalName = getEntryTargetName(key);
+    let cellsSummaries = await getCellsSummaries({genome});
+    let summary = cellsSummaries.get(minimalName) || {};
+
+    let [,, div] = initFullInfo({type: "cell", accession: {genome, key}, isNavigation});
+    let fieldsDiv = div.appendChild(document.createElement("div"));
+    fieldsDiv.classList.add("section");
+    let longDescriptionDiv = div.appendChild(document.createElement("div"));
+    longDescriptionDiv.classList.add("section");
+
+    let [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
+    keyDiv.textContent = "Name";
+    valueDiv.textContent = summary.name || "";
+    if ((summary.aliases || []).length > 0) {
+        [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
+        keyDiv.textContent = "Aliases";
+        valueDiv.textContent = summary.aliases.join(", ");
+    }
+    [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
+    keyDiv.textContent = "Classification";
+    valueDiv.textContent = summary.classification || "Unclassified";
+    [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
+    keyDiv.textContent = "Tissue";
+    valueDiv.textContent = summary.tissue || "Unknown";
+    [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
+    keyDiv.textContent = "Organ";
+    valueDiv.textContent = summary.organ || "Unknown";
+    [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
+    keyDiv.textContent = "Description";
+    valueDiv.textContent = summary.description || "No description available.";
+
+    [keyDiv, valueDiv] = makeKeyValueDiv(longDescriptionDiv);
+    let md = window.markdownit();
+    let result = md.render(summary.long_description || "No long description available.");
+    valueDiv.innerHTML = result;
+    valueDiv.classList.add("markdown");
 }
 
 
@@ -966,7 +1230,7 @@ async function showFullSample({genome, key, isNavigation=false}={}) {
     data[8] = data[8] === "?" ? [] : data[8].split(",");
     data[9] = data[9].split(";").map(x => x.split("="));
 
-    let div = initFullInfo({type: "sample", accession: {genome, key}, isNavigation});
+    let [,, div] = initFullInfo({type: "sample", accession: {genome, key}, isNavigation});
     let fieldsDiv = div.appendChild(document.createElement("div"));
     fieldsDiv.classList.add("section", "fields");
     let attributesDiv = div.appendChild(document.createElement("div"));
@@ -1040,7 +1304,7 @@ async function showFullSample({genome, key, isNavigation=false}={}) {
         valueDiv.textContent = `${formatNumber(data[8][3], {thousands: ","})} below 1e-5`;
     }
 
-    let minimalName = getMinimalTargetName(data[5]);
+    let minimalName = getEntryTargetName(data[5]);
     let targetsSummaries = await getTargetsSummaries({genome});
     let targetSummary = targetsSummaries.get(minimalName) || {};
     [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
@@ -1048,7 +1312,7 @@ async function showFullSample({genome, key, isNavigation=false}={}) {
     [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
     keyDiv.textContent = "Name";
     valueDiv.textContent = `${targetSummary.name || ""} | ${targetSummary.full_name || ""}`;
-    if (targetSummary.aliases || []) {
+    if ((targetSummary.aliases || []).length > 0) {
         [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
         keyDiv.textContent = "Aliases";
         valueDiv.textContent = (targetSummary.aliases || []).join(", ");
@@ -1204,7 +1468,7 @@ async function main() {
         };
     }
 
-    await getDatabaseGenomes();
+    await getAvailableGenomes();
     await searchSamples();
 
 }
