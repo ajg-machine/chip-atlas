@@ -27,7 +27,7 @@
                 --accent-color: oklch(58.8% 0.158 241.966);
                 --desaturated-color: oklch(70.7% 0.022 261.325);
                 --highly-desaturated-color: oklch(92.8% 0.006 264.531);
-                --desaturated-accent-color: oklch(70.711% 0.09331 247.43);
+                --desaturated-accent-color: oklch(73.941% 0.08383 246.922);
             }
 
             .material-symbols-outlined {
@@ -41,6 +41,7 @@
             main {
                 font-family: var(--font-family);
                 font-size: var(--font-size);
+                min-width: 1200px;
             }
 
             a {
@@ -119,12 +120,16 @@
                 font-family: "Material Symbols Outlined";
                 padding-right: 3px;
                 font-size: 95%;
+                display: inline-block;
+                text-decoration: none !important;
             }
             .symbol-right::after {
                 content: attr(data-symbol);
                 font-family: "Material Symbols Outlined";
                 padding-left: 3px;
                 font-size: 95%;
+                display: inline-block;
+                text-decoration: none !important;
             }
             .symbol-left.symbol-colored::before, .symbol-right.symbol-colored::after {
                 color: var(--accent-color);
@@ -250,12 +255,29 @@
             #listing > div:nth-child(1) {
                 display: flex;
                 flex-direction: row;
+                flex-wrap: wrap;
                 gap: 15px;
                 padding: 20px;
-                border-bottom: 1px solid black;
+                border-bottom: 1px dotted black;
                 position: sticky;
                 top: 0;
                 background: white;
+            }
+            #listing > div:nth-child(1) > div {
+                text-decoration: underline;
+                text-underline-offset: 0.5em;
+            }
+            #listing > div:nth-child(1) > div[data-selected="true"] {
+                text-decoration-thickness: 2px;
+                text-underline-offset: calc(0.5em - 1px);
+            }
+            #listing > div:nth-child(1) > div:not([data-selected="true"]) {
+                cursor: pointer;
+                text-decoration-color: var(--highly-desaturated-color);
+            }
+            #listing > div:nth-child(1) > div:not([data-selected="true"]):hover {
+                color: var(--accent-color);
+                text-decoration-color: var(--accent-color);
             }
             #listing > div:nth-child(2) {
                 display: flex;
@@ -290,12 +312,27 @@
             #full-sample > .control {
                 display: flex;
                 flex-direction: row;
+                flex-wrap: wrap;
                 gap: 15px;
                 padding: 20px;
-                border-bottom: 1px solid black;
+                border-bottom: 1px dotted black;
                 position: sticky;
                 top: 0;
                 background: white;
+            }
+            #full-sample > .control [data-selected="true"] {
+                text-decoration: underline;
+                text-decoration-thickness: 2px;
+                text-underline-offset: calc(0.5em - 1px);
+            }
+            #full-sample > .control [data-selected="false"] > span {
+                text-decoration: underline;
+                text-underline-offset: 0.5em;
+                text-decoration-color: var(--highly-desaturated-color);
+            }
+            #full-sample > .control [data-selected="false"] > span:hover {
+                color: var(--accent-color);
+                text-decoration-color: var(--accent-color);
             }
             #full-sample > .sections {
                 display: flex;
@@ -380,6 +417,7 @@
 
 let BASE_URL = "https://raw.githubusercontent.com/ajg-machine/chip-atlas/main";
 let STATE = {
+    currentSearchTask: null,
     genome: {selected: "mm10", available: null},
     database: {},
     targetsSummaries: {},
@@ -391,6 +429,7 @@ let STATE = {
         sampleCount: 500,
         listingCount: 500,
         listing: "targets",
+        fullSampleSummaryFor: "target",
     },
     fullInfo: {back: [], forward: []},
     sort: {by: 6, reverse: true},
@@ -704,7 +743,20 @@ async function updateSamplesList({genome, database}={}) {
 }
 
 
-async function searchSamples() {
+function searchSamples() {
+    return new Promise((resolve, reject) => {
+        if (STATE.currentSearchTask) clearTimeout(STATE.currentSearchTask);
+        STATE.currentSearchTask = setTimeout(async () => {
+            try {
+                resolve(await searchSamplesInner());
+            } catch (e) {
+                reject(e);
+            }
+        }, 0);
+    });
+}
+
+async function searchSamplesInner() {
     let genome = STATE.genome.selected;
     let database = getDatabase({genome});
     let targetsSummaries = getTargetsSummaries({genome});
@@ -857,8 +909,9 @@ async function searchSamples() {
         }
         let div = listingControlDiv.appendChild(document.createElement("div"));
         div.textContent = `${label} (${formatNumber(uniques[value].size, {thousands: ","})})`;
-        div.classList.add("symbol-left", "symbol-colored");
-        div.dataset.symbol = (STATE.display.listing === value) ? "radio_button_checked" : "radio_button_unchecked";
+        div.dataset.selected = (STATE.display.listing === value) ? "true" : "false";
+        //div.classList.add("symbol-left", "symbol-colored");
+        //div.dataset.symbol = (STATE.display.listing === value) ? "radio_button_checked" : "radio_button_unchecked";
         div.onclick = async () => {
             STATE.display.listing = value;
             await searchSamples();
@@ -1037,44 +1090,48 @@ function initFullInfo({type, accession, isNavigation=false}={}) {
     if (STATE.fullInfo.back.length > 1) {
         let backDiv = controlDiv.appendChild(document.createElement("a"));
         let previous = STATE.fullInfo.back[STATE.fullInfo.back.length - 2];
-        backDiv.textContent = previous.accession.key;
+        let backSpan = backDiv.appendChild(document.createElement("span"));
+        backSpan.textContent = previous.accession.key;
         backDiv.classList.add("symbol-left", "symbol-colored", "no-underline", "only-colored-on-hover");
         backDiv.dataset.symbol = "keyboard_arrow_left";
+        backDiv.dataset.selected = "false";
         backDiv.onclick = async () => {
             let current = STATE.fullInfo.back.pop();
             if (!current) return;
             STATE.fullInfo.forward.push(current);
             let previous = STATE.fullInfo.back[STATE.fullInfo.back.length - 1];
             if (!previous) return;
-            if (previous.type === "sample") {
-                await showFullSample({...previous.accession, isNavigation: true});
-            } else if (previous.type === "target") {
-                await showTargetSummary({...previous.accession, isNavigation: true});
-            } else if (previous.type === "cell") {
-                await showCellSummary({...previous.accession, isNavigation: true});
-            }
+            let call =
+                previous.type === "sample" ? showFullSample :
+                previous.type === "target" ? showTargetSummary :
+                previous.type === "cell" ? showCellSummary :
+                null;
+            if (call) await call({...previous.accession, isNavigation: true});
         };
     }
     
     let currentDiv = controlDiv.appendChild(document.createElement("span"));
     currentDiv.textContent = accession.key;
-    currentDiv.style.fontWeight = "bold";
+    currentDiv.dataset.selected = "true";
 
     if (STATE.fullInfo.forward.length > 0) {
         let forwardDiv = controlDiv.appendChild(document.createElement("a"));
         let next = STATE.fullInfo.forward[STATE.fullInfo.forward.length - 1];
-        forwardDiv.textContent = next.accession.key;
+        let forwardSpan = forwardDiv.appendChild(document.createElement("span"));
+        forwardSpan.textContent = next.accession.key;
         forwardDiv.classList.add("symbol-right", "symbol-colored", "no-underline", "only-colored-on-hover");
         forwardDiv.dataset.symbol = "keyboard_arrow_right";
+        forwardDiv.dataset.selected = "false";
         forwardDiv.onclick = async () => {
             let next = STATE.fullInfo.forward.pop();
             if (!next) return;
             STATE.fullInfo.back.push(next);
-            if (next.type === "sample") {
-                await showFullSample({...next.accession, isNavigation: true});
-            } else if (next.type === "target") {
-                await showTargetSummary({...next.accession, isNavigation: true});
-            }
+            let call =
+                next.type === "sample" ? showFullSample :
+                next.type === "target" ? showTargetSummary :
+                next.type === "cell" ? showCellSummary :
+                null;
+            if (call) await call({...next.accession, isNavigation: true});
         };
     }
     return [mainDiv, controlDiv, sectionsDiv];
@@ -1306,30 +1363,79 @@ async function showFullSample({genome, key, isNavigation=false}={}) {
         valueDiv.textContent = `${formatNumber(data[8][3], {thousands: ","})} below 1e-5`;
     }
 
-    let minimalName = getEntryTargetName(data[5]);
-    let targetsSummaries = await getTargetsSummaries({genome});
-    let targetSummary = targetsSummaries.get(minimalName) || {};
     [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
-    keyDiv.textContent = "Target Summary";
-    [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
-    keyDiv.textContent = "Name";
-    valueDiv.textContent = `${targetSummary.name || ""} | ${targetSummary.full_name || ""}`;
-    if ((targetSummary.aliases || []).length > 0) {
+    let targetCellSwitchDiv = keyDiv.appendChild(document.createElement("span"));
+    let targetSwitchType = STATE.display.fullSampleSummaryFor === "target" ? "span" : "a";
+    let targetSwitchDiv = targetCellSwitchDiv.appendChild(document.createElement(targetSwitchType));
+    targetSwitchDiv.textContent = "Target";
+    targetCellSwitchDiv.appendChild(document.createTextNode(" | "));
+    let cellSwitchType = STATE.display.fullSampleSummaryFor === "cell" ? "span" : "a";
+    let cellSwitchDiv = targetCellSwitchDiv.appendChild(document.createElement(cellSwitchType));
+    cellSwitchDiv.textContent = "Cell";
+    targetCellSwitchDiv.appendChild(document.createTextNode(" Summary"));
+    if (STATE.display.fullSampleSummaryFor === "target") {
+        cellSwitchDiv.classList.add("desaturated-color");
+        cellSwitchDiv.onclick = async () => {
+            STATE.display.fullSampleSummaryFor = "cell";
+            await showFullSample({genome, key: srx, isNavigation: true});
+        };
+        let minimalName = getEntryTargetName(data[5]);
+        let targetsSummaries = await getTargetsSummaries({genome});
+        let targetSummary = targetsSummaries.get(minimalName) || {};
         [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
-        keyDiv.textContent = "Aliases";
-        valueDiv.textContent = (targetSummary.aliases || []).join(", ");
+        keyDiv.textContent = "Name";
+        valueDiv.textContent = `${targetSummary.name || ""} | ${targetSummary.full_name || ""}`;
+        if ((targetSummary.aliases || []).length > 0) {
+            [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
+            keyDiv.textContent = "Aliases";
+            valueDiv.textContent = (targetSummary.aliases || []).join(", ");
+        }
+        [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
+        keyDiv.textContent = "Classification";
+        valueDiv.textContent = targetSummary.classification || "Unclassified";
+        [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
+        keyDiv.textContent = "Description";
+        let targetDescriptionDiv = valueDiv.appendChild(document.createElement("span"));
+        let targetDescriptionTextDiv = targetDescriptionDiv.appendChild(document.createElement("span"));
+        targetDescriptionTextDiv.textContent = (targetSummary.description || "No description available.") + " ";
+        let targetDescriptionExpandDiv = targetDescriptionDiv.appendChild(document.createElement("a"));
+        targetDescriptionExpandDiv.textContent = "Expand";
+        targetDescriptionExpandDiv.onclick = () => showTargetSummary({genome, key: targetSummary.name});
+    } else if (STATE.display.fullSampleSummaryFor === "cell") {
+        targetSwitchDiv.classList.add("desaturated-color");
+        targetSwitchDiv.onclick = async () => {
+            STATE.display.fullSampleSummaryFor = "target";
+            await showFullSample({genome, key: srx, isNavigation: true});
+        };
+        let minimalName = getEntryTargetName(data[4]);
+        let cellsSummaries = await getCellsSummaries({genome});
+        let cellSummary = cellsSummaries.get(minimalName) || {};
+        [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
+        keyDiv.textContent = "Name";
+        valueDiv.textContent = cellSummary.name || "";
+        if ((cellSummary.aliases || []).length > 0) {
+            [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
+            keyDiv.textContent = "Aliases";
+            valueDiv.textContent = (cellSummary.aliases || []).join(", ");
+        }
+        [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
+        keyDiv.textContent = "Classification";
+        valueDiv.textContent = cellSummary.classification || "Unclassified";
+        [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
+        keyDiv.textContent = "Tissue";
+        valueDiv.textContent = cellSummary.tissue || "Unknown";
+        [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
+        keyDiv.textContent = "Organ";
+        valueDiv.textContent = cellSummary.organ || "Unknown";
+        [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
+        keyDiv.textContent = "Description";
+        let cellDescriptionDiv = valueDiv.appendChild(document.createElement("span"));
+        let cellDescriptionTextDiv = cellDescriptionDiv.appendChild(document.createElement("span"));
+        cellDescriptionTextDiv.textContent = (cellSummary.description || "No description available.") + " ";
+        let cellDescriptionExpandDiv = cellDescriptionDiv.appendChild(document.createElement("a"));
+        cellDescriptionExpandDiv.textContent = "Expand";
+        cellDescriptionExpandDiv.onclick = () => showCellSummary({genome, key: cellSummary.name.match(/^([^(]*).*$/)[1]});
     }
-    [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
-    keyDiv.textContent = "Classification";
-    valueDiv.textContent = targetSummary.classification || "Unclassified";
-    [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
-    keyDiv.textContent = "Description";
-    let targetDescriptionDiv = valueDiv.appendChild(document.createElement("span"));
-    let targetDescriptionTextDiv = targetDescriptionDiv.appendChild(document.createElement("span"));
-    targetDescriptionTextDiv.textContent = (targetSummary.description || "No description available.") + " ";
-    let targetDescriptionExpandDiv = targetDescriptionDiv.appendChild(document.createElement("a"));
-    targetDescriptionExpandDiv.textContent = "Expand";
-    targetDescriptionExpandDiv.onclick = () => showTargetSummary({genome, key: targetSummary.name});
 
     [keyDiv, valueDiv] = makeKeyValueDiv(linksDiv);
     keyDiv.textContent = "Links";
