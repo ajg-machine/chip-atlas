@@ -383,22 +383,33 @@
                     <div id="controls">
                         <div>
                             <div>Display:</div>
-                            <div class="checkbox" id="toggle-summaries" onclick="databaseControl('toggle-summaries')" data-checked="true">Summaries</div>
+                            <div
+                                class="checkbox"
+                                id="toggle-summaries"
+                                onclick="databaseControl('toggle-summaries')"
+                                data-checked="true"
+                                title="Toggle display of entries summaries in listing"
+                            >Summaries</div>
                         </div>
                         <div id="genome-control">
                             <div>Genome:</div>
                         </div>
                         <div id="search-fields-control">
                             <div>Search in:</div>
-                            <div class="checkbox" data-checked="true" data-indexes="0,1,2">IDs</div>
-                            <div class="checkbox" data-checked="true" data-indexes="5">Target</div>
-                            <div class="checkbox" data-checked="true" data-indexes="4">Cell</div>
-                            <div class="checkbox" data-checked="true" data-indexes="10,11">Aliases</div>
-                            <div class="checkbox" data-indexes="6">Date</div>
-                            <div class="checkbox" data-indexes="7">Title</div>
-                            <div class="checkbox" data-indexes="9">Attributes</div>
+                            <div class="checkbox" data-checked="true" data-search-in="ids" title="Samples GSE, GSM, SRX...">IDs</div>
+                            <div class="checkbox" data-checked="true" data-search-in="target" title="Samples target">Target</div>
+                            <div class="checkbox" data-checked="true" data-search-in="cell" title="Samples cell">Cell</div>
+                            <div
+                                class="checkbox"
+                                data-checked="true"
+                                data-search-in="aliases"
+                                title="Aliases for targets and cells (only if also selected)"
+                            >Aliases</div>
+                            <div class="checkbox" data-search-in="date" title="Samples date">Date</div>
+                            <div class="checkbox" data-search-in="title" title="Sample submission title">Title</div>
+                            <div class="checkbox" data-search-in="attributes" title="Sample attributes">Attributes</div>
                         </div>
-                        <div id="search-control">
+                        <div id="search-control" title='Search terms, may includes modifiers and/or/xor/not, eg: "att20 pax7" "att20 (or: pax7 tpit)" "(and: att20 (or: pax7 tpit) (not: SRX2463201))"'>
                             <div>Search:</div>
                             <div id="search" contenteditable="plaintext-only" oninput="searchSamples()"></div>
                             <div id="search-count"></div>
@@ -610,6 +621,7 @@ async function getAvailableGenomes() {
                 div.textContent = choice;
                 div.classList.add("checkbox");
                 div.dataset.checked = (choice === STATE.genome.selected ? "true" : "false");
+                div.title = `Select genome ${choice}`;
                 div.onclick = async () => {
                     if (div.dataset.checked === "true") return;
                     genomeControl.querySelectorAll(".checkbox").forEach(e => e.dataset.checked = "false");
@@ -765,10 +777,30 @@ async function searchSamplesInner() {
     targetsSummaries = await targetsSummaries;
     cellsSummaries = await cellsSummaries;
     let queryString = document.querySelector("#search").textContent;
-    let searchFieldsIndexes = Array.from(document.querySelectorAll("#search-fields-control > div[data-checked='true']"))
-        .map(div => div.dataset.indexes.split(",").map(Number))
+    let searchIndexes = {
+        ids: [0, 1, 2],
+        target: [5],
+        cell: [4],
+        aliases: [10, 11],
+        date: [6],
+        title: [7],
+        attributes: [9],
+    };
+    let searchFields = Array.from(document.querySelectorAll("#search-fields-control > div[data-checked='true']"))
+        .map(div => div.dataset.searchIn.split(",").map(x => x.trim().toLowerCase()))
         .flat();
-    
+    searchFields = new Set(searchFields);
+    let searchFieldsIndexes = [];
+    for (let field of searchFields) {
+        if (field === "aliases") {
+            if (searchFields.has("target")) searchFieldsIndexes.push(searchIndexes[field][0]);
+            if (searchFields.has("cell")) searchFieldsIndexes.push(searchIndexes[field][1]);
+        } else {
+            searchFieldsIndexes.push(...searchIndexes[field]);
+        }
+    }
+    searchFieldsIndexes.sort((a, b) => a - b);
+
     // Parse query string into a tree structure
     let parseQuery = (str) => {
         str = str.trim();
