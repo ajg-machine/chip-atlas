@@ -1212,6 +1212,10 @@ async function showTargetSummary({genome, key, isNavigation=false}={}) {
     geneCardsDiv.href = `https://www.genecards.org/Search/Keyword?queryString=${urlSearchTerm}`;
     geneCardsDiv.textContent = "GeneCards";
     geneCardsDiv.target = "_blank";
+    let googleDiv = valueDiv.appendChild(document.createElement("a"));
+    googleDiv.href = `https://www.google.com/search?q=${urlSearchTerm}+%28biology%29`;
+    googleDiv.textContent = "Google";
+    googleDiv.target = "_blank";
 
     [keyDiv, valueDiv] = makeKeyValueDiv(longDescriptionDiv);
     let md = window.markdownit();
@@ -1537,12 +1541,21 @@ async function showFullSample({genome, key, isNavigation=false}={}) {
     }, 0);
 
     [keyDiv, valueDiv] = makeKeyValueDiv(linksDiv);
-    keyDiv.textContent = "GeneCards";
+    let targetSearchTerm  = data[5].match(/^([^(]*).*$/)[1].trim();
+    keyDiv.textContent = targetSearchTerm;
+    let ncbiDiv = valueDiv.appendChild(document.createElement("a"));
+    ncbiDiv.href = `https://www.ncbi.nlm.nih.gov/gene/?term=${encodeURIComponent(targetSearchTerm)}`;
+    ncbiDiv.textContent = "NCBI";
+    ncbiDiv.target = "_blank";
     let genecardsDiv = valueDiv.appendChild(document.createElement("a"));
-    let genecardsTerm  = data[5].match(/^([^(]*).*$/)[1];
-    genecardsDiv.href = `https://www.genecards.org/Search/Keyword?queryString=${encodeURIComponent(genecardsTerm)}`;
-    genecardsDiv.textContent = genecardsTerm;
+    genecardsDiv.href = `https://www.genecards.org/Search/Keyword?queryString=${encodeURIComponent(targetSearchTerm)}`;
+    genecardsDiv.textContent = "GeneCards";
     genecardsDiv.target = "_blank";
+    let googleDiv = valueDiv.appendChild(document.createElement("a"));
+    googleDiv.href = `https://www.google.com/search?q=${encodeURIComponent(targetSearchTerm)}+%28biology%29`;
+    googleDiv.textContent = "Google";
+    googleDiv.target = "_blank";
+
     [keyDiv, valueDiv] = makeKeyValueDiv(linksDiv);
     keyDiv.textContent = "GEO Submission";
     if (data[1] === "?") {
