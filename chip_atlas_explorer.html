@@ -954,12 +954,7 @@ async function searchSamples() {
             gseLabelDiv.textContent = gse;
             let gseCountLinkDiv = gseDiv.appendChild(document.createElement("span"));
             let gseCountDiv = gseCountLinkDiv.appendChild(document.createElement("span"));
-            gseCountDiv.textContent = `${formatNumber(entries.length, {thousands: ","})} samples, `;
-            let gseLinkDiv = gseCountLinkDiv.appendChild(document.createElement("a"));
-            gseLinkDiv.textContent = "go to GEO";
-            gseLinkDiv.href = `https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=${gse}`;
-            gseLinkDiv.target = "_blank";
-            gseLinkDiv.rel = "noopener noreferrer";
+            gseCountDiv.textContent = `${formatNumber(entries.length, {thousands: ","})} samples`;
 
             if (STATE.display.summaries) {
                 let detailsDiv = div.appendChild(document.createElement("div"));
@@ -973,6 +968,13 @@ async function searchSamples() {
                 targetsDiv.textContent = `${targetsSet.size} targets: ${Array.from(targetsSet.keys()).join(", ")}`;
                 let cellsDiv = detailsDiv.appendChild(document.createElement("div"));
                 cellsDiv.textContent = `${cellsSet.size} cells: ${Array.from(cellsSet.keys()).join(", ")}`;
+
+                let gseLinkDiv = detailsDiv.appendChild(document.createElement("a"));
+                gseLinkDiv.textContent = "GEO link";
+                gseLinkDiv.href = `https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=${gse}`;
+                gseLinkDiv.target = "_blank";
+                gseLinkDiv.rel = "noopener noreferrer";
+                gseLinkDiv.style.color = "var(--desaturated-accent-color)";
             }
         }
 
