@@ -444,6 +444,7 @@ let STATE = {
     },
     fullInfo: {back: [], forward: []},
     sort: {by: 6, reverse: true},
+    fetchHistory: new Map(),
 };
 
 
@@ -494,9 +495,29 @@ function formatNumber(number, {notation="full", precision=null, thousands=null}=
 }
 
 
-async function fetchUrl(url, {decompress=null, ...options}={}) {
-    let response = await fetch(url, options);
+async function fetchUrl(url, {decompress=null, cache="read+write", ...options}={}) {
+    let cacheKey = JSON.stringify([url, options]);
+    let response;
+    if (cache.includes("read") && STATE.fetchHistory.has(cacheKey)) {
+        let cachedResponse = STATE.fetchHistory.get(cacheKey);
+        if (Date.now() - cachedResponse.date > 10 * 60 * 1000) {
+            STATE.fetchHistory.delete(cacheKey);
+        } else {
+            response = cachedResponse.response.clone();
+        }
+    }
+    if (STATE.fetchHistory.size > 200) {
+        let keys = Array.from(STATE.fetchHistory.keys());
+        for (let key of keys.slice(0, 100)) {
+            STATE.fetchHistory.delete(key);
+        }
+    }
+    if (!response) response = await fetch(url, options);
     if (!response.ok) throw new Error(response);
+    if (cache.includes("write")) {
+        let cachedResponse = {date: Date.now(), response: response.clone()};
+        STATE.fetchHistory.set(cacheKey, cachedResponse);
+    }
     if (decompress) {
         let decompressionStream = new DecompressionStream(decompress);
         let decompressedStream = response.body.pipeThrough(decompressionStream);
@@ -1038,8 +1059,14 @@ async function searchSamplesInner() {
             let gseLabelDiv = gseDiv.appendChild(document.createElement("span"));
             gseLabelDiv.textContent = gse;
             let gseCountLinkDiv = gseDiv.appendChild(document.createElement("span"));
+            gseCountLinkDiv.style.display = "inline-flex";
+            gseCountLinkDiv.style.gap = "10px";
             let gseCountDiv = gseCountLinkDiv.appendChild(document.createElement("span"));
             gseCountDiv.textContent = `${formatNumber(entries.length, {thousands: ","})} samples`;
+            let gseLinkDiv = gseCountLinkDiv.appendChild(document.createElement("a"));
+            gseLinkDiv.textContent = "GEO";
+            gseLinkDiv.href = `https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=${gse}`;
+            gseLinkDiv.target = "_blank";
 
             if (STATE.display.summaries) {
                 let detailsDiv = div.appendChild(document.createElement("div"));
@@ -1053,13 +1080,6 @@ async function searchSamplesInner() {
                 targetsDiv.textContent = `${targetsSet.size} targets: ${Array.from(targetsSet.keys()).join(", ")}`;
                 let cellsDiv = detailsDiv.appendChild(document.createElement("div"));
                 cellsDiv.textContent = `${cellsSet.size} cells: ${Array.from(cellsSet.keys()).join(", ")}`;
-
-                let gseLinkDiv = detailsDiv.appendChild(document.createElement("a"));
-                gseLinkDiv.textContent = "GEO link";
-                gseLinkDiv.href = `https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=${gse}`;
-                gseLinkDiv.target = "_blank";
-                gseLinkDiv.rel = "noopener noreferrer";
-                gseLinkDiv.style.color = "var(--desaturated-accent-color)";
             }
         }
 
@@ -1124,7 +1144,7 @@ function initFullInfo({type, accession, isNavigation=false}={}) {
         let previous = STATE.fullInfo.back[STATE.fullInfo.back.length - 2];
         let backSpan = backDiv.appendChild(document.createElement("span"));
         backSpan.textContent = previous.accession.key;
-        backDiv.classList.add("symbol-left", "symbol-colored", "no-underline", "only-colored-on-hover");
+        backDiv.classList.add("symbol-left", "no-underline", "only-colored-on-hover");
         backDiv.dataset.symbol = "keyboard_arrow_left";
         backDiv.dataset.selected = "false";
         backDiv.onclick = async () => {
@@ -1151,7 +1171,7 @@ function initFullInfo({type, accession, isNavigation=false}={}) {
         let next = STATE.fullInfo.forward[STATE.fullInfo.forward.length - 1];
         let forwardSpan = forwardDiv.appendChild(document.createElement("span"));
         forwardSpan.textContent = next.accession.key;
-        forwardDiv.classList.add("symbol-right", "symbol-colored", "no-underline", "only-colored-on-hover");
+        forwardDiv.classList.add("symbol-right", "no-underline", "only-colored-on-hover");
         forwardDiv.dataset.symbol = "keyboard_arrow_right";
         forwardDiv.dataset.selected = "false";
         forwardDiv.onclick = async () => {
@@ -1340,20 +1360,11 @@ async function showFullSample({genome, key, isNavigation=false}={}) {
     moreInfoDiv.classList.add("section", "more-info");
 
     let [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
-    keyDiv.textContent = "GSE";
-    valueDiv.textContent = data[0];
-    [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
-    keyDiv.textContent = "GSM";
-    valueDiv.textContent = data[1];
-    [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
-    keyDiv.textContent = "SRX";
-    valueDiv.textContent = data[2];
+    keyDiv.textContent = "IDs";
+    valueDiv.textContent = `${data[0]} | ${data[1]} | ${data[2]}`;
     [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
     keyDiv.textContent = "Target";
     valueDiv.textContent = data[5];
-    [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
-    keyDiv.textContent = "Genome";
-    valueDiv.textContent = data[3];
     [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
     keyDiv.textContent = "Cell";
     valueDiv.textContent = data[4];
@@ -1410,7 +1421,6 @@ async function showFullSample({genome, key, isNavigation=false}={}) {
     cellSwitchDiv.textContent = "Cell";
     targetCellSwitchDiv.appendChild(document.createTextNode(" Summary"));
     if (STATE.display.fullSampleSummaryFor === "target") {
-        cellSwitchDiv.classList.add("desaturated-color");
         cellSwitchDiv.onclick = async () => {
             STATE.display.fullSampleSummaryFor = "cell";
             await showFullSample({genome, key: srx, isNavigation: true});
@@ -1438,7 +1448,6 @@ async function showFullSample({genome, key, isNavigation=false}={}) {
         targetDescriptionExpandDiv.textContent = "Expand";
         targetDescriptionExpandDiv.onclick = () => showTargetSummary({genome, key: targetSummary.name});
     } else if (STATE.display.fullSampleSummaryFor === "cell") {
-        targetSwitchDiv.classList.add("desaturated-color");
         targetSwitchDiv.onclick = async () => {
             STATE.display.fullSampleSummaryFor = "target";
             await showFullSample({genome, key: srx, isNavigation: true});
