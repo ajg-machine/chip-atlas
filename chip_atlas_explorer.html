@@ -13,6 +13,8 @@
 
         <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" />
         
+        <link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/ajg-machine/static@main/fonts/PP/PPMonument/fonts.css">
+
         <script async src="https://cdn.jsdelivr.net/npm/markdown-it@14.1.0/dist/markdown-it.min.js"></script>
 
         <style>
@@ -20,8 +22,8 @@
             body { padding: 0; margin: 0; }
             
             :root {
-                --font-size: 13px;
-                --font-family: "Roboto Flex", system-ui, sans-serif;
+                --font-size: 12px;
+                --font-family: "PP Monument Normal", serif, "Roboto Flex", system-ui, sans-serif;
                 --font-family-mono: "Roboto Mono", ui-monospace, monospace;
                 --font-family-condensed: "Roboto Condensed", system-ui, sans-serif;
                 --accent-color: oklch(58.8% 0.158 241.966);
@@ -495,6 +497,45 @@ function formatNumber(number, {notation="full", precision=null, thousands=null}=
 }
 
 
+function romanToArabic(roman) {
+    let romanNumerals = {
+        'i': 1, 'v': 5, 'x': 10, 'l': 50,
+        'c': 100, 'd': 500, 'm': 1000
+    };
+    roman = roman.toLowerCase();
+    let result = 0;
+    for (let i = 0; i < roman.length; i++) {
+        let current = romanNumerals[roman[i]];
+        let next = romanNumerals[roman[i + 1]];
+        if (!current) throw new Error(`invalid roman numeral character: ${roman[i]}`);
+        if (next && current < next) {
+            result -= current;
+        } else {
+            result += current;
+        }
+    }
+    
+    return result;
+}
+
+
+function arabicToRoman(num) {
+    if (num <= 0 || num >= 4000) {
+        throw new Error('number must be between 1 and 3999');
+    }
+    let values = [1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1];
+    let numerals = ['m', 'cm', 'd', 'cd', 'c', 'xc', 'l', 'xl', 'x', 'ix', 'v', 'iv', 'i'];
+    let result = '';
+    for (let i = 0; i < values.length; i++) {
+        while (num >= values[i]) {
+            result += numerals[i];
+            num -= values[i];
+        }
+    }
+    return result;
+}
+
+
 async function fetchUrl(url, {decompress=null, cache="read+write", ...options}={}) {
     let cacheKey = JSON.stringify([url, options]);
     let response;
@@ -669,7 +710,7 @@ async function getDatabase({genome}={}) {
             let url = `${BASE_URL}/database/genomes/${file}`;
             let response = await fetchUrl(url, {decompress: "gzip"});
             let data = await response.text();
-            // 12 -> 2 others columns may be added at the end for targets and cells aliases
+            // 12 -> 2 others columns added at the end for targets and cells aliases
             data = data
                 .trimEnd().split("\n")
                 .map(line => line.split("\t"))
@@ -851,14 +892,9 @@ async function searchSamplesInner() {
             .replace(/[^\w()]+/g, "");
         
         // Handle pol1-9 to roman numerals - create OR with both versions
-        if (normalized.match(/^pol([ivx\d]+)$/)) {
-            let x = normalized.match(/^pol([ivx\d]+)$/)[1];
-            let roman =
-                x === "1" ? "i" : x === "2" ? "ii" :
-                x === "3" ? "iii" : x === "4" ? "iv" :
-                x === "5" ? "v" : x === "6" ? "vi" :
-                x === "7" ? "vii" : x === "8" ? "viii" :
-                x === "9" ? "ix" : x;
+        if (normalized.match(/^pol(\d+)$/)) {
+            let x = normalized.match(/^pol(\d+)$/)[1];
+            let roman = arabicToRoman(Number(x)).toLocaleLowerCase();
             let romanForm = `rnapolymerase${roman}`;
             return {
                 type: "or",
