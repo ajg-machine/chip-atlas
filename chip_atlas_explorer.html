@@ -25,8 +25,8 @@
             :root {
                 --font-size: 14px;
                 --line-height: 1.25;
-                --font-opsz: 20;
-                --font-family: "Helvetica Now", "Roboto Flex", system-ui, sans-serif;
+                --font-weight-bold: 700;
+                --font-family: "Helvetica Now Text", "Roboto Flex", system-ui, sans-serif;
                 --font-family-mono: "Roboto Mono", ui-monospace, monospace;
                 --font-family-condensed: "Roboto Condensed", system-ui, sans-serif;
                 --accent-color: oklch(58.8% 0.158 241.966);
@@ -47,7 +47,6 @@
                 font-family: var(--font-family);
                 font-size: var(--font-size);
                 line-height: var(--line-height);
-                font-variation-settings: 'opsz' var(--font-opsz);
                 min-width: 1200px;
             }
 
@@ -166,7 +165,7 @@
                 color: var(--accent-color);
             }
             #samples-list > div:nth-child(1) {
-                font-weight: bold;
+                font-weight: var(--font-weight-bold);
             }
             #samples-list > div:nth-child(1) > div {
                 display: flex;
@@ -302,7 +301,7 @@
                 display: none;
             }
             #listing > div:nth-child(2) > div > :nth-child(1) > :nth-child(1) {
-                font-weight: bold;
+                font-weight: var(--font-weight-bold);
                 margin-right: 10px;
             }
             #listing > div:nth-child(2) > div > :nth-child(2) {
@@ -363,7 +362,7 @@
 
             #full-sample .key-value-pair > div:first-child {
                 display: inline;
-                font-weight: bold;
+                font-weight: var(--font-weight-bold);
                 margin-right: 10px;
             }
             #full-sample .key-value-pair > div:nth-child(2) {
@@ -1035,7 +1034,7 @@ async function searchSamplesInner() {
             if (STATE.display.summaries) {
                 let classDiv = entrySummaryDiv.appendChild(document.createElement("span"));
                 classDiv.textContent = (summary.classification || "Unclassified") + ".";
-                classDiv.style.fontWeight = "bold";
+                classDiv.style.fontWeight = "var(--font-weight-bold)";
                 entrySummaryDiv.appendChild(document.createElement("span")).textContent = " ";
                 let descriptionDiv = entrySummaryDiv.appendChild(document.createElement("span"));
                 descriptionDiv.textContent = summary.description || "No summary available.";
@@ -1071,7 +1070,7 @@ async function searchSamplesInner() {
                 ]
                 classContent = classContent.filter(x => x.length > 0).join(" | ");
                 classDiv.textContent = classContent + ".";
-                classDiv.style.fontWeight = "bold";
+                classDiv.style.fontWeight = "var(--font-weight-bold)";
                 entrySummaryDiv.appendChild(document.createElement("span")).textContent = " ";
                 let descriptionDiv = entrySummaryDiv.appendChild(document.createElement("span"));
                 descriptionDiv.textContent = summary.description || "No summary available.";
