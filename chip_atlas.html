@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <title>ChIP Atlas</title>
+    </head>
+    <body>
+        <script>
+"use strict";
+
+let URL = "https://raw.githubusercontent.com/ajg-machine/chip-atlas/main/chip_atlas_explorer.html";
+
+async function replacePage(url) {
+    try {
+        let response = await fetch(url);
+        if (!response.ok) throw new Error(response);
+        let text = await response.text();
+        
+        let tmpDiv = document.createElement("div");
+        tmpDiv.innerHTML = text;
+        let faviconLink = tmpDiv.querySelector("link[rel='icon'], link[rel='shortcut icon']");
+        if (faviconLink) {
+            let newFavicon = document.createElement("link");
+            newFavicon.rel = faviconLink.rel;
+            newFavicon.href = faviconLink.href;
+            let oldFavicon = document.querySelector("link[rel='icon'], link[rel='shortcut icon']");
+            if (oldFavicon) oldFavicon.remove();
+            document.head.appendChild(newFavicon);
+        }
+        
+        document.open();
+        document.write(text);
+        document.close();
+    } catch (error) {
+        document.querySelector("body").textContent = `Error: ${error.message}`;
+    }
+}
+
+replacePage(URL);
+
+        </script>
+    </body>
+</html>
