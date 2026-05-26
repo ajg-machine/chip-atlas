@@ -8,7 +8,7 @@
         <script>
 "use strict";
 
-let URL = "https://raw.githubusercontent.com/ajg-machine/chip-atlas/main/chip_atlas_explorer.html";
+let URL = "https://cdn.jsdelivr.net/gh/ajg-machine/chip-atlas@main/chip_atlas_explorer.html";
 
 async function replacePage(url) {
     try {
@@ -18,6 +18,14 @@ async function replacePage(url) {
         
         let tmpDiv = document.createElement("div");
         tmpDiv.innerHTML = text;
+        
+        // Update title
+        let newTitle = tmpDiv.querySelector("title");
+        if (newTitle) {
+            document.title = newTitle.textContent;
+        }
+        
+        // Update favicon
         let faviconLink = tmpDiv.querySelector("link[rel='icon'], link[rel='shortcut icon']");
         if (faviconLink) {
             let newFavicon = document.createElement("link");
