@@ -38,14 +38,6 @@
                 --desaturated-accent-color: oklch(73.941% 0.08383 246.922);
             }
 
-            .material-symbols-outlined {
-                font-variation-settings:
-                'FILL' 0,
-                'wght' 400,
-                'GRAD' 0,
-                'opsz' 24
-            }
-
             main {
                 font-family: var(--font-family);
                 font-size: var(--font-size);
@@ -110,13 +102,22 @@
             }
             .checkbox[data-checked="true"]::before {
                 font-family: "Material Symbols Outlined";
-                content: "radio_button_checked";
-                font-size: 95%;
+                content: "check";
             }
             .checkbox:not([data-checked="true"])::before {
                 font-family: "Material Symbols Outlined";
-                content: "radio_button_unchecked";
-                font-size: 95%;
+                content: "close";
+                color: var(--desaturated-color);
+            }
+            .checkbox[data-radio="true"][data-checked="true"]::before {
+                font-family: "Material Symbols Outlined";
+                content: "circle_circle";
+                font-variation-settings: 'FILL' 1;
+            }
+            .checkbox[data-radio="true"]:not([data-checked="true"])::before {
+                font-family: "Material Symbols Outlined";
+                content: "circle";
+                color: var(--desaturated-color);
             }
 
             .symbol-left, .symbol-right {
@@ -144,6 +145,50 @@
                 color: var(--accent-color);
             }
 
+            select {
+                appearance: base-select;
+                font: inherit;
+                line-height: var(--line-height);
+                border: none;
+                margin: 0;
+                padding: 0;
+                background: none;
+                min-height: 0;
+                box-sizing: content-box;
+                cursor: pointer;
+                gap: 3px;
+            }
+            select:hover, select:focus {
+                color: var(--accent-color);
+            }
+            select::picker-icon {
+                content: "keyboard_arrow_down";
+                font-family: "Material Symbols Outlined";
+            }
+            select:open::picker-icon {
+                content: "keyboard_arrow_up";
+                font-family: "Material Symbols Outlined";
+            }
+            select::picker(select) {
+                appearance: base-select;
+                margin-top: 3px;
+                margin-bottom: 3px;
+                padding: 3px 3px 3px 0;
+                box-shadow: 0 3px 6px 0px var(--desaturated-color);
+            }
+            select option {
+                gap: 3px;
+            }
+            select option::checkmark {
+                content: "check";
+                font-family: "Material Symbols Outlined";
+                color: var(--accent-color);
+            }
+            select option:hover {
+                color: var(--accent-color);
+                background: none;
+            }
+            
             #explorer {
                 display: grid;
                 grid-template-columns: 600px 1fr;
@@ -684,21 +729,20 @@ async function getAvailableGenomes() {
             let data = await response.json();
 
             let genomeControl = document.querySelector("#genome-control");
-            genomeControl.querySelectorAll(".checkbox").forEach(e => e.remove());
+            let genomeControlSelect = genomeControl.appendChild(document.createElement("select"));
+            genomeControlSelect.id = "genome-select";
+            genomeControlSelect.name = "genome";
+            genomeControlSelect.title = "Select genome";
+            genomeControlSelect.onchange = async () => {
+                STATE.genome.selected = genomeControlSelect.value;
+                await searchSamples();
+            };
             for (let choice of Object.keys(data).toSorted()) {
-                let div = genomeControl.appendChild(document.createElement("div"));
-                div.textContent = choice;
-                div.classList.add("checkbox");
-                div.dataset.checked = (choice === STATE.genome.selected ? "true" : "false");
-                div.title = `Select genome ${choice}`;
-                div.onclick = async () => {
-                    if (div.dataset.checked === "true") return;
-                    genomeControl.querySelectorAll(".checkbox").forEach(e => e.dataset.checked = "false");
-                    div.dataset.checked = "true";
-                    STATE.genome.selected = choice;
-                    await searchSamples();
-                };
+                let option = genomeControlSelect.appendChild(document.createElement("option"));
+                option.value = choice;
+                option.textContent = choice;
             }
+            genomeControlSelect.value = STATE.genome.selected;
             resolve(data);
         } catch (e) {
             reject(e);
