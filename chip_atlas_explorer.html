@@ -760,12 +760,12 @@ async function getAvailableGenomes() {
             };
             for (let choice of Object.keys(data).toSorted()) {
                 let option = genomeControlSelect.appendChild(document.createElement("option"));
-                let genomeName = `${choice} ⋅ ${data[choice].taxon_name}`;
+                let genomeName = `${choice} / ${data[choice].taxon_name}`;
                 option.value = genomeName;
                 option.textContent = genomeName;
             }
             let selectedGenomeId = STATE.genome.selected;
-            let selectedGenomeName = `${selectedGenomeId} ⋅ ${data[selectedGenomeId].taxon_name}`;
+            let selectedGenomeName = `${selectedGenomeId} / ${data[selectedGenomeId].taxon_name}`;
             genomeControlSelect.value = selectedGenomeName;
             resolve(data);
         } catch (e) {
