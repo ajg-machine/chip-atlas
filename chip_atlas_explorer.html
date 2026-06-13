@@ -173,8 +173,28 @@
                 appearance: base-select;
                 margin-top: 3px;
                 margin-bottom: 3px;
-                padding: 3px 3px 3px 0;
+                padding: 6px 6px 6px 0;
                 box-shadow: 0 3px 6px 0px var(--desaturated-color);
+
+                opacity: 0;
+                transform: translateY(-3px);
+                transition:
+                    opacity 0.08s ease,
+                    transform 0.08s ease,
+                    display 0.08s allow-discrete,
+                    overlay 0.08s allow-discrete;
+                transform-origin: top center;
+
+            }
+            select:open::picker(select) {
+                opacity: 1;
+                transform: translateY(0);
+            }
+            @starting-style {
+                select:open::picker(select) {
+                    opacity: 0;
+                    transform: translateY(-3px);
+                }
             }
             select option {
                 gap: 3px;
@@ -480,7 +500,7 @@
         <script>
 "use strict";
 
-let BASE_URL = "https://raw.githubusercontent.com/ajg-machine/chip-atlas/main";
+let BASE_URL = "https://cdn.jsdelivr.net/gh/ajg-machine/chip-atlas@main";
 let STATE = {
     currentSearchTask: null,
     genome: {selected: "mm10", available: null},
@@ -734,15 +754,19 @@ async function getAvailableGenomes() {
             genomeControlSelect.name = "genome";
             genomeControlSelect.title = "Select genome";
             genomeControlSelect.onchange = async () => {
-                STATE.genome.selected = genomeControlSelect.value;
+                let genomeName = genomeControlSelect.value;
+                STATE.genome.selected = genomeName.match(/^(^\S+)/)[1];
                 await searchSamples();
             };
             for (let choice of Object.keys(data).toSorted()) {
                 let option = genomeControlSelect.appendChild(document.createElement("option"));
-                option.value = choice;
-                option.textContent = choice;
+                let genomeName = `${choice} ⋅ ${data[choice].taxon_name}`;
+                option.value = genomeName;
+                option.textContent = genomeName;
             }
-            genomeControlSelect.value = STATE.genome.selected;
+            let selectedGenomeId = STATE.genome.selected;
+            let selectedGenomeName = `${selectedGenomeId} ⋅ ${data[selectedGenomeId].taxon_name}`;
+            genomeControlSelect.value = selectedGenomeName;
             resolve(data);
         } catch (e) {
             reject(e);
