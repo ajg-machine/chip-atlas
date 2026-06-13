@@ -755,17 +755,17 @@ async function getAvailableGenomes() {
             genomeControlSelect.title = "Select genome";
             genomeControlSelect.onchange = async () => {
                 let genomeName = genomeControlSelect.value;
-                STATE.genome.selected = genomeName.match(/^(^\S+)/)[1];
+                STATE.genome.selected = genomeName.match(/^([^\/]*\/)?(.+)$/)[2].trim();
                 await searchSamples();
             };
             for (let choice of Object.keys(data).toSorted()) {
                 let option = genomeControlSelect.appendChild(document.createElement("option"));
-                let genomeName = `${choice} / ${data[choice].taxon_name}`;
+                let genomeName = `${data[choice].taxon_name} / ${choice}`;
                 option.value = genomeName;
                 option.textContent = genomeName;
             }
             let selectedGenomeId = STATE.genome.selected;
-            let selectedGenomeName = `${selectedGenomeId} / ${data[selectedGenomeId].taxon_name}`;
+            let selectedGenomeName = `${data[selectedGenomeId].taxon_name} / ${selectedGenomeId}`;
             genomeControlSelect.value = selectedGenomeName;
             resolve(data);
         } catch (e) {
