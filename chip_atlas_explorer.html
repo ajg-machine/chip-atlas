@@ -505,6 +505,7 @@ let STATE = {
     currentSearchTask: null,
     genome: {selected: "mm10", available: null},
     database: {},
+    crossrefs: {},
     targetsSummaries: {},
     cellsSummaries: {},
     targetsAliasesInserted: {},
@@ -776,11 +777,63 @@ async function getAvailableGenomes() {
 }
 
 
+async function getCrossrefs({genome}={}) {
+    if (STATE.crossrefs[genome]) return STATE.crossrefs[genome];
+    STATE.crossrefs[genome] = new Promise(async (resolve, reject) => {
+        try {
+            let url = `${BASE_URL}/database/crossrefs/${genome}.tsv.gz`;
+            let response = await fetchUrl(url, {decompress: "gzip"});
+            let data = await response.text();
+            let result = {};
+            for (let line of data.trim().split("\n")) {
+                let entry = line.split("\t");
+                entry = {
+                    bioproject: entry[0],
+                    biosample: entry[1],
+                    experiment: entry[2],
+                    geoSample: entry[3],
+                    geoSeries: entry[4],
+                    runs: entry[5].split("+"),
+                    sample: entry[6],
+                    study: entry[7],
+                    submission: entry[8],
+                }
+                result[entry.experiment] = entry;
+            }
+            resolve(result);
+        } catch (e) {
+            reject(e);
+        }
+    });
+    return STATE.crossrefs[genome];
+}
+function packCrossref(crossref, runs=false) {
+    if (runs) return crossref.runs.join(" ");
+    return [
+        crossref.bioproject,
+        crossref.biosample,
+        crossref.experiment,
+        crossref.geoSample,
+        crossref.geoSeries,
+        crossref.sample,
+        crossref.study,
+        crossref.submission,
+    ].join(" ");
+}
+function unpackCrossref(packedCrossref, runs=false) {
+    if (runs) return packedCrossref.split(" ");
+    let [bioproject, biosample, experiment, geoSample, geoSeries, sample, study, submission] = packedCrossref.split(" ");
+    return {bioproject, biosample, experiment, geoSample, geoSeries, sample, study, submission};
+}
+
+
 async function getDatabase({genome}={}) {
     genome = genome.toLowerCase();
     if (STATE.database[genome]) return STATE.database[genome];
+    let crossrefs = getCrossrefs({genome});
     STATE.database[genome] = new Promise(async (resolve, reject) => {
         try {
+            crossrefs = await crossrefs;
             let file = `${genome}.full.tsv.gz`;
             let url = `${BASE_URL}/database/genomes/${file}`;
             let response = await fetchUrl(url, {decompress: "gzip"});
@@ -791,7 +844,11 @@ async function getDatabase({genome}={}) {
                 .map(line => line.split("\t"))
                 .map(line => line.length < 12 ? line.concat(Array(12 - line.length).fill("")) : line)
                 .map(line => line.map((entry, index) => {
-                    if (index === 9) {
+                    if (index === 0 || index === 1) {
+                        entry = ["", ""];
+                    } else if (index === 6) {
+                        entry = [entry, entry.replace(/\D+/g, " ")];
+                    } else if (index === 9) {
                         entry = [entry, entry
                             .toLowerCase()
                             .split(";")
@@ -804,6 +861,14 @@ async function getDatabase({genome}={}) {
                     }
                     return entry;
                 }));
+                for (let entry of data) {
+                    let entryCrossref = crossrefs[entry[2][0].toUpperCase()];
+                    if (!entryCrossref) continue;
+                    let packedCrossref = packCrossref(entryCrossref);
+                    entry[0] = [packedCrossref, packedCrossref.toLowerCase()];
+                    let packedRuns = packCrossref(entryCrossref, true);
+                    entry[1] = [packedRuns, packedRuns.toLowerCase()];
+                }
                 resolve(data);
         } catch (e) {
             reject(e);
@@ -863,12 +928,14 @@ async function updateSamplesList({genome, database}={}) {
             break;
         }
 
+        let sampleCrossref = unpackCrossref(sample[0][0]);
+
         itemDivs[0][0].textContent = sample[6][0];
         itemDivs[0][1].textContent = "+ Expand";
         itemDivs[0][1].style.color = "var(--desaturated-accent-color)";
         itemDivs[0][0].onclick = () => showFullSample({genome, key: sample[2][0]});
         itemDivs[0][1].onclick = () => showFullSample({genome, key: sample[2][0]});
-        itemDivs[1][0].textContent = sample[0][0];
+        itemDivs[1][0].textContent = sampleCrossref.geoSeries || sampleCrossref.bioproject || "?";
         itemDivs[1][1].textContent = sample[2][0];
         itemDivs[2][0].textContent = sample[5][0].match(/^([^(]*).*$/)[1];
         itemDivs[2][1].textContent = (sample[5][0].match(/^[^(]*\(([^(]*)\)$/) || ["", ""])[1];
@@ -1455,6 +1522,8 @@ async function showFullSample({genome, key, isNavigation=false}={}) {
     data = data[0].map(x => x[0]);
     data[8] = data[8] === "?" ? [] : data[8].split(",");
     data[9] = data[9].split(";").map(x => x.split("="));
+    let sampleCrossref = unpackCrossref(data[0]);
+    let sampleRuns = unpackCrossref(data[1], true);
 
     let [,, div] = initFullInfo({type: "sample", accession: {genome, key}, isNavigation});
     let fieldsDiv = div.appendChild(document.createElement("div"));
@@ -1472,7 +1541,10 @@ async function showFullSample({genome, key, isNavigation=false}={}) {
 
     let [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
     keyDiv.textContent = "IDs";
-    valueDiv.textContent = `${data[0]} | ${data[1]} | ${data[2]}`;
+    valueDiv.textContent = `${
+        sampleCrossref.geoSeries || sampleCrossref.bioproject || "?"} | ${
+        sampleCrossref.geoSample || sampleCrossref.biosample || "?"} | ${
+        data[2]}`;
     [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
     keyDiv.textContent = "Target";
     valueDiv.textContent = data[5];
@@ -1530,10 +1602,18 @@ async function showFullSample({genome, key, isNavigation=false}={}) {
     let cellSwitchType = STATE.display.fullSampleSummaryFor === "cell" ? "span" : "a";
     let cellSwitchDiv = targetCellSwitchDiv.appendChild(document.createElement(cellSwitchType));
     cellSwitchDiv.textContent = "Cell";
+    targetCellSwitchDiv.appendChild(document.createTextNode(" | "));
+    let idsSwitchType = STATE.display.fullSampleSummaryFor === "ids" ? "span" : "a";
+    let idsSwitchDiv = targetCellSwitchDiv.appendChild(document.createElement(idsSwitchType));
+    idsSwitchDiv.textContent = "IDs";
     targetCellSwitchDiv.appendChild(document.createTextNode(" Summary"));
     if (STATE.display.fullSampleSummaryFor === "target") {
         cellSwitchDiv.onclick = async () => {
             STATE.display.fullSampleSummaryFor = "cell";
+            await showFullSample({genome, key: srx, isNavigation: true});
+        };
+        idsSwitchDiv.onclick = async () => {
+            STATE.display.fullSampleSummaryFor = "ids";
             await showFullSample({genome, key: srx, isNavigation: true});
         };
         let minimalName = getEntryTargetName(data[5]);
@@ -1561,6 +1641,10 @@ async function showFullSample({genome, key, isNavigation=false}={}) {
     } else if (STATE.display.fullSampleSummaryFor === "cell") {
         targetSwitchDiv.onclick = async () => {
             STATE.display.fullSampleSummaryFor = "target";
+            await showFullSample({genome, key: srx, isNavigation: true});
+        };
+        idsSwitchDiv.onclick = async () => {
+            STATE.display.fullSampleSummaryFor = "ids";
             await showFullSample({genome, key: srx, isNavigation: true});
         };
         let minimalName = getEntryTargetName(data[4]);
@@ -1591,6 +1675,31 @@ async function showFullSample({genome, key, isNavigation=false}={}) {
         let cellDescriptionExpandDiv = cellDescriptionDiv.appendChild(document.createElement("a"));
         cellDescriptionExpandDiv.textContent = "Expand";
         cellDescriptionExpandDiv.onclick = () => showCellSummary({genome, key: cellSummary.name.match(/^([^(]*).*$/)[1]});
+    } else if (STATE.display.fullSampleSummaryFor === "ids") {
+        targetSwitchDiv.onclick = async () => {
+            STATE.display.fullSampleSummaryFor = "target";
+            await showFullSample({genome, key: srx, isNavigation: true});
+        };
+        cellSwitchDiv.onclick = async () => {
+            STATE.display.fullSampleSummaryFor = "cell";
+            await showFullSample({genome, key: srx, isNavigation: true});
+        };
+        let crossrefKeys = [
+            ["GEO Series", sampleCrossref.geoSeries || "?"],
+            ["GEO Sample", sampleCrossref.geoSample || "?"],
+            ["BioProject", sampleCrossref.bioproject || "?"],
+            ["BioSample", sampleCrossref.biosample || "?"],
+            ["Submission", sampleCrossref.submission || "?"],
+            ["Study", sampleCrossref.study || "?"],
+            ["Experiment", sampleCrossref.experiment || "?"],
+            ["Sample", sampleCrossref.sample || "?"],
+            ["Runs", sampleRuns.join(", ") || "?"],
+        ];
+        for (let [key, value] of crossrefKeys) {
+            [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
+            keyDiv.textContent = key;
+            valueDiv.textContent = value;
+        }
     }
 
     [keyDiv, valueDiv] = makeKeyValueDiv(linksDiv);
@@ -1602,9 +1711,9 @@ async function showFullSample({genome, key, isNavigation=false}={}) {
     chipAtlasDiv.href = `https://chip-atlas.org/view?id=${srx}`;
     chipAtlasDiv.textContent = "ChIP-Atlas";
     chipAtlasDiv.target = "_blank";
-    if (data[1] !== "?") {
+    if (sampleCrossref.geoSample) {
         let geoDiv = sourceDiv.appendChild(document.createElement("a"));
-        geoDiv.href = `https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=${data[1]}`;
+        geoDiv.href = `https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=${sampleCrossref.geoSample}`;
         geoDiv.textContent = "GEO";
         geoDiv.target = "_blank";
     }
@@ -1678,14 +1787,12 @@ async function showFullSample({genome, key, isNavigation=false}={}) {
 
     [keyDiv, valueDiv] = makeKeyValueDiv(linksDiv);
     keyDiv.textContent = "GEO Submission";
-    if (data[1] === "?") {
-        valueDiv.textContent = "Not available";
-    } else {
+    if (sampleCrossref.geoSample) {
         let showInfoDiv = valueDiv.appendChild(document.createElement("a"));
         showInfoDiv.textContent = "Show";
         showInfoDiv.classList.add("show-hide");
         let showInfo = async () => {
-            let gsmInfo = await getGSMInfo({gsm: data[1]});
+            let gsmInfo = await getGSMInfo({gsm: sampleCrossref.geoSample});
             for (let [infoKey, infoValue] of gsmInfo) {
                 let [keyDiv, valueDiv] = makeKeyValueDiv(moreInfoDiv);
                 infoKey = infoKey.replace(/_/g, " ");
@@ -1697,6 +1804,8 @@ async function showFullSample({genome, key, isNavigation=false}={}) {
             }
         }
         showInfoDiv.onclick = () => toggleMoreInfo(linksDiv, moreInfoDiv, showInfoDiv, showInfo);
+    } else {
+        valueDiv.textContent = "Not available";
     }
 
 }
