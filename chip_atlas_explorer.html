@@ -171,13 +171,13 @@
             }
             select::picker(select) {
                 appearance: base-select;
-                margin-top: 3px;
-                margin-bottom: 3px;
-                padding: 6px 6px 6px 0;
-                box-shadow: 0 3px 6px 0px var(--desaturated-color);
+                margin-top: 6px;
+                margin-bottom: 6px;
+                padding: 12px 12px 12px 0;
+                box-shadow: 0 6px 12px -6px var(--desaturated-color);
 
                 opacity: 0;
-                transform: translateY(-3px);
+                transform: translateY(-6px);
                 transition:
                     opacity 0.08s ease,
                     transform 0.08s ease,
@@ -193,7 +193,7 @@
             @starting-style {
                 select:open::picker(select) {
                     opacity: 0;
-                    transform: translateY(-3px);
+                    transform: translateY(-6px);
                 }
             }
             select option {
@@ -810,8 +810,10 @@ async function getDatabase({genome}={}) {
                 .map(line => line.split("\t"))
                 .map(line => line.length < 12 ? line.concat(Array(12 - line.length).fill("")) : line)
                 .map(line => line.map((entry, index) => {
-                    if (index === 0 || index === 1) {
-                        entry = [entry, entry.toLowerCase()];
+                    if (index === 0) {
+                        entry = [unpackCrossref(entry), entry.toLowerCase()];
+                    } else if (index === 1) {
+                        entry = [unpackCrossref(entry, true), entry.toLowerCase()];
                     } else if (index === 6) {
                         entry = [entry, entry.replace(/\D+/g, " ")];
                     } else if (index === 9) {
@@ -886,14 +888,12 @@ async function updateSamplesList({genome, database}={}) {
             break;
         }
 
-        let sampleCrossref = unpackCrossref(sample[0][0]);
-
         itemDivs[0][0].textContent = sample[6][0];
         itemDivs[0][1].textContent = "+ Expand";
         itemDivs[0][1].style.color = "var(--desaturated-accent-color)";
         itemDivs[0][0].onclick = () => showFullSample({genome, key: sample[2][0]});
         itemDivs[0][1].onclick = () => showFullSample({genome, key: sample[2][0]});
-        itemDivs[1][0].textContent = sampleCrossref.geoSeries || sampleCrossref.bioproject || "?";
+        itemDivs[1][0].textContent = sample[0][0].geoSeries || sample[0][0].bioproject || "?";
         itemDivs[1][1].textContent = sample[2][0];
         itemDivs[2][0].textContent = sample[5][0].match(/^([^(]*).*$/)[1];
         itemDivs[2][1].textContent = (sample[5][0].match(/^[^(]*\(([^(]*)\)$/) || ["", ""])[1];
@@ -1093,8 +1093,14 @@ async function searchSamplesInner() {
     let listingControlDiv = listingDiv.appendChild(document.createElement("div"));
     for (let [label, value, entryIndex] of [["GSEs", "gse", 0], ["Targets", "targets", 5], ["Cells", "cells", 4]]) {
         uniques[value] = new Map();
-        for (let entry of results) {
-            uniques[value].set(entry[entryIndex][0], entry);
+        if (value === "gse") {
+            for (let entry of results) {
+                uniques[value].set(entry[0][0].geoSeries || entry[0][0].bioproject || "?", entry);
+            }
+        } else {
+            for (let entry of results) {
+                uniques[value].set(entry[entryIndex][0], entry);
+            }
         }
         let div = listingControlDiv.appendChild(document.createElement("div"));
         div.textContent = `${label} (${formatNumber(uniques[value].size, {thousands: ","})})`;
@@ -1182,7 +1188,7 @@ async function searchSamplesInner() {
     } else if (STATE.display.listing === "gse") {
         let resultsByGse = new Map();
         for (let entry of results) {
-            let gse = entry[0][0];
+            let gse = entry[0][0].geoSeries || entry[0][0].bioproject || "?";
             if (!uniques["gse"].has(gse)) break;
             if (!resultsByGse.has(gse)) resultsByGse.set(gse, []);
             resultsByGse.get(gse).push(entry);
@@ -1200,8 +1206,13 @@ async function searchSamplesInner() {
             let gseCountDiv = gseCountLinkDiv.appendChild(document.createElement("span"));
             gseCountDiv.textContent = `${formatNumber(entries.length, {thousands: ","})} samples`;
             let gseLinkDiv = gseCountLinkDiv.appendChild(document.createElement("a"));
-            gseLinkDiv.textContent = "GEO";
-            gseLinkDiv.href = `https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=${gse}`;
+            if (gse.startsWith("G")) {
+                gseLinkDiv.textContent = "GEO";
+                gseLinkDiv.href = `https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=${gse}`;
+            } else {
+                gseLinkDiv.textContent = "ENA";
+                gseLinkDiv.href = `https://www.ebi.ac.uk/ena/browser/view/${gse}`;
+            }
             gseLinkDiv.target = "_blank";
 
             if (STATE.display.summaries) {
@@ -1480,8 +1491,6 @@ async function showFullSample({genome, key, isNavigation=false}={}) {
     data = data[0].map(x => x[0]);
     data[8] = data[8] === "?" ? [] : data[8].split(",");
     data[9] = data[9].split(";").map(x => x.split("="));
-    let sampleCrossref = unpackCrossref(data[0]);
-    let sampleRuns = unpackCrossref(data[1], true);
 
     let [,, div] = initFullInfo({type: "sample", accession: {genome, key}, isNavigation});
     let fieldsDiv = div.appendChild(document.createElement("div"));
@@ -1500,8 +1509,8 @@ async function showFullSample({genome, key, isNavigation=false}={}) {
     let [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
     keyDiv.textContent = "IDs";
     valueDiv.textContent = `${
-        sampleCrossref.geoSeries || sampleCrossref.bioproject || "?"} | ${
-        sampleCrossref.geoSample || sampleCrossref.biosample || "?"} | ${
+        data[0].geoSeries || data[0].bioproject || "?"} | ${
+        data[0].geoSample || data[0].biosample || "?"} | ${
         data[2]}`;
     [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
     keyDiv.textContent = "Target";
@@ -1643,20 +1652,38 @@ async function showFullSample({genome, key, isNavigation=false}={}) {
             await showFullSample({genome, key: srx, isNavigation: true});
         };
         let crossrefKeys = [
-            ["GEO Series", sampleCrossref.geoSeries || "?"],
-            ["GEO Sample", sampleCrossref.geoSample || "?"],
-            ["BioProject", sampleCrossref.bioproject || "?"],
-            ["BioSample", sampleCrossref.biosample || "?"],
-            ["Submission", sampleCrossref.submission || "?"],
-            ["Study", sampleCrossref.study || "?"],
+            ["GEO Series", data[0].geoSeries || "?"],
+            ["GEO Sample", data[0].geoSample || "?"],
+            ["BioProject", data[0].bioproject || "?"],
+            ["BioSample", data[0].biosample || "?"],
+            ["Submission", data[0].submission || "?"],
+            ["Study", data[0].study || "?"],
             ["Experiment", srx || "?"],
-            ["Sample", sampleCrossref.sample || "?"],
-            ["Runs", sampleRuns.join(", ") || "?"],
+            ["Sample", data[0].sample || "?"],
+            ["Runs", data[1].join(", ") || "?"],
         ];
         for (let [key, value] of crossrefKeys) {
             [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
             keyDiv.textContent = key;
-            valueDiv.textContent = value;
+            let valueValueDiv = valueDiv.appendChild(document.createElement("span"));
+            valueValueDiv.textContent = value;
+            if (value !== "" && value !== "?") {
+                if (key === "GEO Series" || key === "GEO Sample") {
+                    let linkValueDiv = valueDiv.appendChild(document.createElement("a"));
+                    linkValueDiv.textContent = "GEO";
+                    linkValueDiv.href = `https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=${value}`;
+                    linkValueDiv.target = "_blank";
+                } else if (key !== "Runs") {
+                    let linkValueDiv = valueDiv.appendChild(document.createElement("a"));
+                    linkValueDiv.textContent = "SRA";
+                    linkValueDiv.href = `https://www.ncbi.nlm.nih.gov/sra/?term=${value}`;
+                    linkValueDiv.target = "_blank";
+                    linkValueDiv = valueDiv.appendChild(document.createElement("a"));
+                    linkValueDiv.textContent = "ENA";
+                    linkValueDiv.href = `https://www.ebi.ac.uk/ena/browser/view/${value}`;
+                    linkValueDiv.target = "_blank";
+                }
+            }
         }
     }
 
@@ -1669,9 +1696,9 @@ async function showFullSample({genome, key, isNavigation=false}={}) {
     chipAtlasDiv.href = `https://chip-atlas.org/view?id=${srx}`;
     chipAtlasDiv.textContent = "ChIP-Atlas";
     chipAtlasDiv.target = "_blank";
-    if (sampleCrossref.geoSample) {
+    if (data[0].geoSample) {
         let geoDiv = sourceDiv.appendChild(document.createElement("a"));
-        geoDiv.href = `https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=${sampleCrossref.geoSample}`;
+        geoDiv.href = `https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=${data[0].geoSample}`;
         geoDiv.textContent = "GEO";
         geoDiv.target = "_blank";
     }
@@ -1745,12 +1772,12 @@ async function showFullSample({genome, key, isNavigation=false}={}) {
 
     [keyDiv, valueDiv] = makeKeyValueDiv(linksDiv);
     keyDiv.textContent = "GEO Submission";
-    if (sampleCrossref.geoSample) {
+    if (data[0].geoSample) {
         let showInfoDiv = valueDiv.appendChild(document.createElement("a"));
         showInfoDiv.textContent = "Show";
         showInfoDiv.classList.add("show-hide");
         let showInfo = async () => {
-            let gsmInfo = await getGSMInfo({gsm: sampleCrossref.geoSample});
+            let gsmInfo = await getGSMInfo({gsm: data[0].geoSample});
             for (let [infoKey, infoValue] of gsmInfo) {
                 let [keyDiv, valueDiv] = makeKeyValueDiv(moreInfoDiv);
                 infoKey = infoKey.replace(/_/g, " ");
