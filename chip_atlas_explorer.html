@@ -609,6 +609,7 @@ function arabicToRoman(num) {
 
 
 async function fetchUrl(url, {decompress=null, cache="read+write", ...options}={}) {
+    if (options.cache == null) options.cache = "no-cache";
     let cacheKey = JSON.stringify([url, options]);
     let response;
     if (cache.includes("read") && STATE.fetchHistory.has(cacheKey)) {
