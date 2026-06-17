@@ -12,7 +12,7 @@ let URL = "https://cdn.jsdelivr.net/gh/ajg-machine/chip-atlas@main/chip_atlas_ex
 
 async function replacePage(url) {
     try {
-        let response = await fetch(url);
+        let response = await fetch(url, {cache: "no-cache"});
         if (!response.ok) throw new Error(response);
         let text = await response.text();
         
