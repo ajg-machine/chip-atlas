@@ -1165,6 +1165,7 @@ async function initListing() {
     }
     STATE.current.listing.count = 0;
 
+    document.querySelector("#listing").scrollTop = 0;
     await showMoreListing();
 
 }
@@ -1286,7 +1287,6 @@ async function showMoreListing() {
         }
 
     }
-    document.querySelector("#listing").scrollTop = 0;
 
 }
 
