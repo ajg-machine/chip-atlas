@@ -502,7 +502,6 @@
 
 let BASE_URL = "https://cdn.jsdelivr.net/gh/ajg-machine/chip-atlas@main";
 let STATE = {
-    currentSearchTask: null,
     genome: {selected: "mm10", available: null},
     database: {},
     targetsSummaries: {},
@@ -511,10 +510,22 @@ let STATE = {
     cellsAliasesInserted: {},
     display: {
         summaries: true,
-        sampleCount: 500,
-        listingCount: 500,
+        sampleCount: 10, // to replace
+        listingCount: 500, // to replace
+
+        showStep: 100,
+
         listing: "targets",
         fullSampleSummaryFor: "target",
+    },
+    current: {
+        searchTask: null,
+        samples: {div: null, list: null, count: null},
+        listing: {div: null, target: null, list: null, count: null},
+    },
+    infiniteScrolling: {
+        samples: null,
+        listing: null,
     },
     fullInfo: {back: [], forward: []},
     sort: {by: 6, reverse: true},
@@ -839,8 +850,174 @@ async function getDatabase({genome}={}) {
 }
 
 
-async function updateSamplesList({genome, database}={}) {
-    let sampleCount = formatNumber(database.length, {thousands: ","})
+function searchSamples() {
+    return new Promise((resolve, reject) => {
+        if (STATE.current.searchTask) clearTimeout(STATE.current.searchTask);
+        STATE.current.searchTask = setTimeout(async () => {
+            try {
+                resolve(await initSearchSamples());
+            } catch (e) {
+                reject(e);
+            }
+        }, 0);
+    });
+}
+
+async function initSearchSamples() {
+    let genome = STATE.genome.selected;
+    let database = getDatabase({genome});
+    let targetsSummaries = getTargetsSummaries({genome});
+    let cellsSummaries = getCellsSummaries({genome});
+    database = await database;
+    targetsSummaries = await targetsSummaries;
+    cellsSummaries = await cellsSummaries;
+    let searchIndexes = {
+        ids: [0, 1, 2],
+        target: [5],
+        cell: [4],
+        aliases: [10, 11],
+        date: [6],
+        title: [7],
+        attributes: [9],
+    };
+    let searchFields = Array.from(document.querySelectorAll("#search-fields-control > div[data-checked='true']"))
+        .map(div => div.dataset.searchIn.split(",").map(x => x.trim().toLowerCase()))
+        .flat();
+    searchFields = new Set(searchFields);
+    let searchFieldsIndexes = [];
+    for (let field of searchFields) {
+        if (field === "aliases") {
+            if (searchFields.has("target")) searchFieldsIndexes.push(searchIndexes[field][0]);
+            if (searchFields.has("cell")) searchFieldsIndexes.push(searchIndexes[field][1]);
+        } else {
+            searchFieldsIndexes.push(...searchIndexes[field]);
+        }
+    }
+    searchFieldsIndexes.sort((a, b) => a - b);
+
+    // Parse query string into a tree structure
+    let parseSearchQuery = (str) => {
+        str = str.trim();
+        
+        // Check if it's wrapped in parentheses with an operator
+        let strMatch = str.match(/^\(\s*(and|or|xor|not):\s*(.+?)\s*\)$/i);
+        if (strMatch) {
+            let [operator, content] = [strMatch[1].toLowerCase(), strMatch[2]];
+            return {type: operator, children: parseSearchQueryList(content)};
+        }
+        
+        // Check if it's wrapped in parentheses without an operator (default to AND)
+        if (str.match(/^\(.+\)$/)) {
+            let content = str.slice(1, -1).trim();
+            return {type: "and", children: parseSearchQueryList(content)};
+        }
+        
+        // Check if multiple terms without parentheses (default to AND)
+        let content = str.split(/\s+/);
+        if (content.length > 1) {
+            return parseSearchQuery(`(and: ${content.join(" ")})`);
+        }
+        
+        // Single term (no parentheses or operator)
+        let normalized = str
+            .toLowerCase()
+            .replace(/[^\w()]+/g, "");
+        
+        // Handle pol1-9 to roman numerals - create OR with both versions
+        if (normalized.match(/^pol(\d+)$/)) {
+            let x = normalized.match(/^pol(\d+)$/)[1];
+            let roman = arabicToRoman(Number(x)).toLocaleLowerCase();
+            let romanForm = `rnapolymerase${roman}`;
+            return {
+                type: "or",
+                children: [
+                    {type: "term", value: normalized},
+                    {type: "term", value: romanForm}
+                ]
+            };
+        }
+        return {type: "term", value: normalized};
+    };
+    
+    let parseSearchQueryList = (str) => {
+        let terms = [];
+        let depth = 0;
+        let current = "";
+        for (let i = 0; i < str.length; i++) {
+            let char = str[i];
+            if (char === "(") {
+                depth++;
+                current += char;
+            } else if (char === ")") {
+                depth--;
+                current += char;
+            } else if (char === " " && depth === 0) {
+                if (current.trim().length > 0) {
+                    terms.push(parseSearchQuery(current.trim()));
+                    current = "";
+                }
+            } else {
+                current += char;
+            }
+        }
+        if (current.trim().length > 0) {
+            terms.push(parseSearchQuery(current.trim()));
+        }
+        return terms;
+    };
+    
+    // Evaluate query tree against a sample
+    let evaluateSearchQuery = (query, sample) => {
+        if (query.type === "term") {
+            for (let fieldIndex of searchFieldsIndexes) {
+                let field = sample[fieldIndex];
+                if (field[1].includes(query.value)) {
+                    return true;
+                }
+            }
+            return false;
+        } else if (query.type === "and") {
+            return query.children.every(child => evaluateSearchQuery(child, sample));
+        } else if (query.type === "or") {
+            return query.children.some(child => evaluateSearchQuery(child, sample));
+        } else if (query.type === "xor") {
+            let matches = query.children.filter(child => evaluateSearchQuery(child, sample));
+            return matches.length === 1;
+        } else if (query.type === "not") {
+            return !query.children.every(child => evaluateSearchQuery(child, sample));
+        }
+        return false;
+    };
+    
+    // Parse the query string
+    let searchQuery = document.querySelector("#search").textContent;
+    searchQuery = searchQuery.trim();
+    let results = database;
+    if (searchQuery.length !== 0) {
+        let queries = parseSearchQuery(searchQuery);
+        // Filter database
+        results = database.filter(sample => evaluateSearchQuery(queries, sample));
+    } else {
+        results = Array.from(database);
+    }
+
+    // Sort results
+    let sortFn = (a, b) => {
+        if (a === "?" || b === "?") {
+            if (a === "?" && b === "?") return 0;
+            if (a === "?") return 1;
+            return -1;
+        }
+        return (STATE.sort.reverse ? -1 : 1) * a.localeCompare(b);
+        if (a < b) return STATE.sort.reverse ? 1 : -1;
+        if (a > b) return STATE.sort.reverse ? -1 : 1;
+        return 0;
+    };
+    if (STATE.sort.by != null) {
+        results.sort((a, b) => sortFn(a[STATE.sort.by][0], b[STATE.sort.by][0]));
+    }
+
+    let sampleCount = formatNumber(results.length, {thousands: ","})
     document.getElementById("search-count").textContent = `${sampleCount} samples`;
     let samplesDiv = document.getElementById("samples-list");
     samplesDiv.textContent = "";
@@ -867,6 +1044,23 @@ async function updateSamplesList({genome, database}={}) {
         };
     }
 
+    document.querySelector("#samples-list-wrapper").scrollTop = 0;
+    STATE.current.samples.div = samplesDiv;
+    STATE.current.samples.list = results;
+    STATE.current.samples.count = 0;
+    await showMoreSamples();
+    await initListing();
+
+}
+
+
+async function showMoreSamples() {
+
+    let genome = STATE.genome.selected;
+    let currentIndex = STATE.current.samples.count;
+    if (currentIndex == null) return;
+    let targetIndex = Math.min(currentIndex + STATE.display.showStep, STATE.current.samples.list.length);
+
     let makeItemsDivs = (rowDiv) => {
         let itemsDivs = [];
         for (let i = 0; i < 4; i++) {
@@ -878,16 +1072,11 @@ async function updateSamplesList({genome, database}={}) {
         return itemsDivs;
     };
 
-    for (let [index, sample] of database.entries()) {
-        rowDiv = samplesDiv.appendChild(document.createElement("div"));
-        let itemDivs = makeItemsDivs(rowDiv);
+    for (let index = currentIndex; index < targetIndex; index++) {
+        let sample = STATE.current.samples.list[index];
 
-        
-        if (index >= STATE.display.sampleCount) {
-            let moreCount = formatNumber(database.length - STATE.display.sampleCount, {thousands: ","})
-            itemDivs[3][0].textContent = `[ + ${moreCount} more ]`;
-            break;
-        }
+        let rowDiv = STATE.current.samples.div.appendChild(document.createElement("div"));
+        let itemDivs = makeItemsDivs(rowDiv);
 
         itemDivs[0][0].textContent = sample[6][0];
         itemDivs[0][1].textContent = "+ Expand";
@@ -910,184 +1099,20 @@ async function updateSamplesList({genome, database}={}) {
         }
         itemDivs[3][0].textContent = sample[4][0].match(/^([^(]*).*$/)[1];
         itemDivs[3][1].textContent = (sample[4][0].match(/^[^(]*\(([^(]*)\)$/) || ["", ""])[1];
-
-
-
     }
+
+    STATE.current.samples.count = targetIndex;
 
 }
 
+async function initListing() {
 
-function searchSamples() {
-    return new Promise((resolve, reject) => {
-        if (STATE.currentSearchTask) clearTimeout(STATE.currentSearchTask);
-        STATE.currentSearchTask = setTimeout(async () => {
-            try {
-                resolve(await searchSamplesInner());
-            } catch (e) {
-                reject(e);
-            }
-        }, 0);
-    });
-}
+    let currentDatabase = STATE.current.samples.list;
+    if (currentDatabase == null) return;
 
-async function searchSamplesInner() {
-    let genome = STATE.genome.selected;
-    let database = getDatabase({genome});
-    let targetsSummaries = getTargetsSummaries({genome});
-    let cellsSummaries = getCellsSummaries({genome});
-    database = await database;
-    targetsSummaries = await targetsSummaries;
-    cellsSummaries = await cellsSummaries;
-    let queryString = document.querySelector("#search").textContent;
-    let searchIndexes = {
-        ids: [0, 1, 2],
-        target: [5],
-        cell: [4],
-        aliases: [10, 11],
-        date: [6],
-        title: [7],
-        attributes: [9],
-    };
-    let searchFields = Array.from(document.querySelectorAll("#search-fields-control > div[data-checked='true']"))
-        .map(div => div.dataset.searchIn.split(",").map(x => x.trim().toLowerCase()))
-        .flat();
-    searchFields = new Set(searchFields);
-    let searchFieldsIndexes = [];
-    for (let field of searchFields) {
-        if (field === "aliases") {
-            if (searchFields.has("target")) searchFieldsIndexes.push(searchIndexes[field][0]);
-            if (searchFields.has("cell")) searchFieldsIndexes.push(searchIndexes[field][1]);
-        } else {
-            searchFieldsIndexes.push(...searchIndexes[field]);
-        }
-    }
-    searchFieldsIndexes.sort((a, b) => a - b);
-
-    // Parse query string into a tree structure
-    let parseQuery = (str) => {
-        str = str.trim();
-        
-        // Check if it's wrapped in parentheses with an operator
-        let strMatch = str.match(/^\(\s*(and|or|xor|not):\s*(.+?)\s*\)$/i);
-        if (strMatch) {
-            let [operator, content] = [strMatch[1].toLowerCase(), strMatch[2]];
-            return {type: operator, children: parseQueryList(content)};
-        }
-        
-        // Check if it's wrapped in parentheses without an operator (default to AND)
-        if (str.match(/^\(.+\)$/)) {
-            let content = str.slice(1, -1).trim();
-            return {type: "and", children: parseQueryList(content)};
-        }
-        
-        // Check if multiple terms without parentheses (default to AND)
-        let content = str.split(/\s+/);
-        if (content.length > 1) {
-            return parseQuery(`(and: ${content.join(" ")})`);
-        }
-        
-        // Single term (no parentheses or operator)
-        let normalized = str
-            .toLowerCase()
-            .replace(/[^\w()]+/g, "");
-        
-        // Handle pol1-9 to roman numerals - create OR with both versions
-        if (normalized.match(/^pol(\d+)$/)) {
-            let x = normalized.match(/^pol(\d+)$/)[1];
-            let roman = arabicToRoman(Number(x)).toLocaleLowerCase();
-            let romanForm = `rnapolymerase${roman}`;
-            return {
-                type: "or",
-                children: [
-                    {type: "term", value: normalized},
-                    {type: "term", value: romanForm}
-                ]
-            };
-        }
-        return {type: "term", value: normalized};
-    };
-    
-    let parseQueryList = (str) => {
-        let terms = [];
-        let depth = 0;
-        let current = "";
-        for (let i = 0; i < str.length; i++) {
-            let char = str[i];
-            if (char === "(") {
-                depth++;
-                current += char;
-            } else if (char === ")") {
-                depth--;
-                current += char;
-            } else if (char === " " && depth === 0) {
-                if (current.trim().length > 0) {
-                    terms.push(parseQuery(current.trim()));
-                    current = "";
-                }
-            } else {
-                current += char;
-            }
-        }
-        if (current.trim().length > 0) {
-            terms.push(parseQuery(current.trim()));
-        }
-        return terms;
-    };
-    
-    // Evaluate query tree against a sample
-    let evaluateQuery = (query, sample) => {
-        if (query.type === "term") {
-            for (let fieldIndex of searchFieldsIndexes) {
-                let field = sample[fieldIndex];
-                if (field[1].includes(query.value)) {
-                    return true;
-                }
-            }
-            return false;
-        } else if (query.type === "and") {
-            return query.children.every(child => evaluateQuery(child, sample));
-        } else if (query.type === "or") {
-            return query.children.some(child => evaluateQuery(child, sample));
-        } else if (query.type === "xor") {
-            let matches = query.children.filter(child => evaluateQuery(child, sample));
-            return matches.length === 1;
-        } else if (query.type === "not") {
-            return !query.children.every(child => evaluateQuery(child, sample));
-        }
-        return false;
-    };
-    
     // initialize targets and cells list
     let listingDiv = document.querySelector("#listing");
     listingDiv.textContent = "";
-
-    // Parse the query string
-    queryString = queryString.trim();
-    let results = database;
-    if (queryString.length !== 0) {
-        let queries = parseQuery(queryString);
-        // Filter database
-        results = database.filter(sample => evaluateQuery(queries, sample));
-    } else {
-        results = Array.from(database);
-    }
-
-    // Sort results
-    let sortFn = (a, b) => {
-        if (a === "?" || b === "?") {
-            if (a === "?" && b === "?") return 0;
-            if (a === "?") return 1;
-            return -1;
-        }
-        return (STATE.sort.reverse ? -1 : 1) * a.localeCompare(b);
-        if (a < b) return STATE.sort.reverse ? 1 : -1;
-        if (a > b) return STATE.sort.reverse ? -1 : 1;
-        return 0;
-    };
-    if (STATE.sort.by != null) {
-        results.sort((a, b) => sortFn(a[STATE.sort.by][0], b[STATE.sort.by][0]));
-    }
 
     // Update listing controls
     let uniques = {};
@@ -1095,11 +1120,11 @@ async function searchSamplesInner() {
     for (let [label, value, entryIndex] of [["GSEs", "gse", 0], ["Targets", "targets", 5], ["Cells", "cells", 4]]) {
         uniques[value] = new Map();
         if (value === "gse") {
-            for (let entry of results) {
+            for (let entry of currentDatabase) {
                 uniques[value].set(entry[0][0].geoSeries || entry[0][0].bioproject || "?", entry);
             }
         } else {
-            for (let entry of results) {
+            for (let entry of currentDatabase) {
                 uniques[value].set(entry[entryIndex][0], entry);
             }
         }
@@ -1109,17 +1134,53 @@ async function searchSamplesInner() {
         //div.classList.add("symbol-left", "symbol-colored");
         //div.dataset.symbol = (STATE.display.listing === value) ? "radio_button_checked" : "radio_button_unchecked";
         div.onclick = async () => {
+            if (STATE.display.listing === value) return;
             STATE.display.listing = value;
-            await searchSamples();
+            await initListing();
         };
     }
     let listingListDiv = listingDiv.appendChild(document.createElement("div"));
 
-    // Update listing list
+    STATE.current.listing.div = listingListDiv;
     if (STATE.display.listing === "targets") {
-        uniques["targets"] = Array.from(uniques["targets"].values());
-        for (let entry of uniques["targets"].slice(0, STATE.display.listingCount)) {
-            let div = listingListDiv.appendChild(document.createElement("div"));
+        STATE.current.listing.target = "targets";
+        STATE.current.listing.list = Array.from(uniques["targets"].values());
+    } else if (STATE.display.listing === "cells") {
+        STATE.current.listing.target = "cells";
+        STATE.current.listing.list = Array.from(uniques["cells"].values());
+    } else if (STATE.display.listing === "gse") {
+        STATE.current.listing.target = "gse";
+        let resultsByGse = new Map();
+        for (let entry of currentDatabase) {
+            let gse = entry[0][0].geoSeries || entry[0][0].bioproject || "?";
+            if (!uniques["gse"].has(gse)) break;
+            if (!resultsByGse.has(gse)) resultsByGse.set(gse, []);
+            resultsByGse.get(gse).push(entry);
+            if (resultsByGse.size >= STATE.display.listingCount) break;
+        }
+        STATE.current.listing.list = Array.from(resultsByGse.entries());
+    } else {
+        STATE.current.listing.target = null;
+        STATE.current.listing.list = null;
+    }
+    STATE.current.listing.count = 0;
+
+    await showMoreListing();
+
+}
+
+async function showMoreListing() {
+
+    let genome = STATE.genome.selected;
+    if (STATE.current.listing.target == null) return;
+    let currentIndex = STATE.current.listing.count;
+    let targetIndex = Math.min(currentIndex + STATE.display.showStep, STATE.current.listing.list.length);
+    
+    if (STATE.current.listing.target === "targets") {
+        let targetsSummaries = await getTargetsSummaries({genome});
+        for (let index = currentIndex; index < targetIndex; index++) {
+            let entry = STATE.current.listing.list[index];
+            let div = STATE.current.listing.div.appendChild(document.createElement("div"));
             let entryNameDiv = div.appendChild(document.createElement("div"));
             let entrySummaryDiv = div.appendChild(document.createElement("div"));
 
@@ -1149,10 +1210,11 @@ async function searchSamplesInner() {
                 entryExpandDiv.classList.add("desaturated-color");
             }
         }
-    } else if (STATE.display.listing === "cells") {
-        uniques["cells"] = Array.from(uniques["cells"].values());
-        for (let entry of uniques["cells"].slice(0, STATE.display.listingCount)) {
-            let div = listingListDiv.appendChild(document.createElement("div"));
+    } else if (STATE.current.listing.target === "cells") {
+        let cellsSummaries = await getCellsSummaries({genome});
+        for (let index = currentIndex; index < targetIndex; index++) {
+            let entry = STATE.current.listing.list[index];
+            let div = STATE.current.listing.div.appendChild(document.createElement("div"));
             let entryNameDiv = div.appendChild(document.createElement("div"));
             let entrySummaryDiv = div.appendChild(document.createElement("div"));
 
@@ -1186,18 +1248,10 @@ async function searchSamplesInner() {
             }
         }
         
-    } else if (STATE.display.listing === "gse") {
-        let resultsByGse = new Map();
-        for (let entry of results) {
-            let gse = entry[0][0].geoSeries || entry[0][0].bioproject || "?";
-            if (!uniques["gse"].has(gse)) break;
-            if (!resultsByGse.has(gse)) resultsByGse.set(gse, []);
-            resultsByGse.get(gse).push(entry);
-            if (resultsByGse.size >= STATE.display.listingCount) break;
-        }
-        uniques["gse"] = Array.from(uniques["gse"].values());
-        for (let [gse, entries] of resultsByGse) {
-            let div = listingListDiv.appendChild(document.createElement("div"));
+    } else if (STATE.current.listing.target === "gse") {
+        for (let index = currentIndex; index < targetIndex; index++) {
+            let [gse, entries] = STATE.current.listing.list[index];
+            let div = STATE.current.listing.div.appendChild(document.createElement("div"));
             let gseDiv = div.appendChild(document.createElement("div"));
             let gseLabelDiv = gseDiv.appendChild(document.createElement("span"));
             gseLabelDiv.textContent = gse;
@@ -1232,14 +1286,30 @@ async function searchSamplesInner() {
         }
 
     }
-    if (uniques[STATE.display.listing].length > STATE.display.listingCount) {
-        let div = listingListDiv.appendChild(document.createElement("div"));
-        let moreCount = formatNumber(uniques[STATE.display.listing].length - STATE.display.listingCount, {thousands: ","})
-        div.textContent = `[ + ${moreCount} more ]`;
-    }
+    document.querySelector("#listing").scrollTop = 0;
 
-    await updateSamplesList({genome, database: results});
 }
+
+function setupInfiniteScroll(scrollEl, loadMore, hasMore, {threshold = 400} = {}) {
+    let loading = false;
+    async function check() {
+        if (loading || !hasMore()) return;
+        let nearBottom = scrollEl.scrollTop + scrollEl.clientHeight
+                         >= scrollEl.scrollHeight - threshold;
+        if (!nearBottom) return;
+        loading = true;
+        try {
+            await loadMore();
+        } finally {
+            loading = false;
+        }
+        // Content may still be too short to scroll — re-check next frame.
+        requestAnimationFrame(check);
+    }
+    scrollEl.addEventListener("scroll", check, {passive: true});
+    return check; // call after a fresh render to fill the viewport
+}
+
 
 
 function makeKeyValueDiv(parent, {fieldClasses=[]}={}) {
@@ -1824,6 +1894,19 @@ function uniquesInArray(array) {
 
 
 async function main() {
+
+    STATE.infiniteScrolling.samples = setupInfiniteScroll(
+        document.querySelector("#samples-list-wrapper"),
+        () => showMoreSamples(),
+        () => STATE.current.samples.count != null
+            && STATE.current.samples.count < STATE.current.samples.list.length,
+    );
+    STATE.infiniteScrolling.listing = setupInfiniteScroll(
+        document.querySelector("#listing"),
+        () => showMoreListing(),
+        () => STATE.current.listing.target != null
+            && STATE.current.listing.count < STATE.current.listing.list.length,
+    );
 
     for (let div of document.querySelectorAll("#search-fields-control > div:not(:nth-child(1))")) {
         div.onclick = async () => {
