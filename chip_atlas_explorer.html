@@ -1168,6 +1168,8 @@ async function showMoreSamples() {
     if (currentIndex == null) return;
     let targetIndex = Math.min(currentIndex + STATE.display.showStep, STATE.current.samples.list.length);
 
+    let targetsSummaries = await getTargetsSummaries({genome});
+
     let makeItemsDivs = (rowDiv) => {
         let itemsDivs = [];
         for (let i = 0; i < 4; i++) {
@@ -1182,8 +1184,17 @@ async function showMoreSamples() {
     for (let index = currentIndex; index < targetIndex; index++) {
         let sample = STATE.current.samples.list[index];
 
+        let targetMinimalName = getEntryTargetName(sample[6][1]);
+        let targetSummary = targetsSummaries.get(targetMinimalName) || {};
+        let targetClass = targetSummary.classification || "Unclassified";
+
         let rowDiv = STATE.current.samples.div.appendChild(document.createElement("div"));
         let itemDivs = makeItemsDivs(rowDiv);
+        let addText = (div, text, maxLength=25) => {
+            let displayText = text.length > maxLength ? text.slice(0, maxLength - 1).trimEnd() + "…" : text;
+            div.textContent = displayText;
+            div.title = text;
+        };
 
         itemDivs[0][0].textContent = sample[7][0];
         itemDivs[0][1].textContent = "+ Expand";
@@ -1192,20 +1203,23 @@ async function showMoreSamples() {
         itemDivs[0][1].onclick = () => showFullSample({genome, key: sample[2][0]});
         itemDivs[1][0].textContent = sample[1][0];
         itemDivs[1][1].textContent = sample[2][0];
-        itemDivs[2][0].textContent = sample[6][0].match(/^([^(]*).*$/)[1];
-        itemDivs[2][1].textContent = (sample[6][0].match(/^[^(]*\(([^(]*)\)$/) || ["", ""])[1];
-        if (itemDivs[2][0].textContent.match(/^RNA polymerase ([IVX]+)$/i)) {
-            itemDivs[2][0].textContent = "Pol " + itemDivs[2][0].textContent.match(/^RNA polymerase ([IVX]+)$/i)[1];
-            itemDivs[2][1].textContent = "RNA polymerase";
-        } else if (itemDivs[2][0].textContent === "Input control") {
-            itemDivs[2][0].textContent = "Input"
-            itemDivs[2][1].textContent = "Control";
-        } else if (itemDivs[2][0].textContent.match(/^([^-]+)-Seq$/i)) {
-            itemDivs[2][0].textContent = itemDivs[2][0].textContent.match(/^([^-]+)-Seq$/i)[1];
-            itemDivs[2][1].textContent = "Seq";
-        }
-        itemDivs[3][0].textContent = sample[5][0].match(/^([^(]*).*$/)[1];
-        itemDivs[3][1].textContent = (sample[5][0].match(/^[^(]*\(([^(]*)\)$/) || ["", ""])[1];
+
+        addText(itemDivs[2][0], sample[6][0].match(/^([^(]*).*$/)[1]);
+        addText(itemDivs[2][1], targetClass);
+        //itemDivs[2][0].textContent = sample[6][0].match(/^([^(]*).*$/)[1];
+        //itemDivs[2][1].textContent = (sample[6][0].match(/^[^(]*\(([^(]*)\)$/) || ["", ""])[1];
+        //if (itemDivs[2][0].textContent.match(/^RNA polymerase ([IVX]+)$/i)) {
+        //    itemDivs[2][0].textContent = "Pol " + itemDivs[2][0].textContent.match(/^RNA polymerase ([IVX]+)$/i)[1];
+        //    itemDivs[2][1].textContent = "RNA polymerase";
+        //} else if (itemDivs[2][0].textContent === "Input control") {
+        //    itemDivs[2][0].textContent = "Input"
+        //    itemDivs[2][1].textContent = "Control";
+        //} else if (itemDivs[2][0].textContent.match(/^([^-]+)-Seq$/i)) {
+        //    itemDivs[2][0].textContent = itemDivs[2][0].textContent.match(/^([^-]+)-Seq$/i)[1];
+        //    itemDivs[2][1].textContent = "Seq";
+        //}
+        addText(itemDivs[3][0], sample[5][0].match(/^([^(]*).*$/)[1]);
+        addText(itemDivs[3][1], (sample[5][0].match(/^[^(]*\(([^(]*)\)$/) || ["", ""])[1]);
     }
 
     STATE.current.samples.count = targetIndex;
