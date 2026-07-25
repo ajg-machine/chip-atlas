@@ -557,6 +557,7 @@ let STATE = {
     current: {
         searchTask: null,
         genome: null,
+        search: null,
         samples: {div: null, list: null, count: null},
         listing: {div: null, target: null, list: null, count: null},
     },
@@ -565,7 +566,7 @@ let STATE = {
         listing: null,
     },
     fullInfo: {back: [], forward: []},
-    sort: {by: 6, reverse: true},
+    sort: {by: 7, reverse: true},
     fetchHistory: new Map(),
 };
 
@@ -729,12 +730,12 @@ async function getTargetsSummaries({genome}={}) {
             if (!STATE.targetsAliasesInserted[genome]) {
                 let database = await getDatabase({genome});
                 for (let entry of database) {
-                    let minimalName = getEntryTargetName(entry[5][0]);
+                    let minimalName = getEntryTargetName(entry[6][0]);
                     let summary = targetsSummaries.get(minimalName);
                     if (!summary) continue;
                     let aliases = [summary.name, summary.full_name, ...summary.aliases]
                         .map(getEntryTargetName);
-                    entry[10][1] = (entry[10][1] ? entry[10][1] + " " : "") + aliases.join(" ");            
+                    entry[11][1] = (entry[11][1] ? entry[11][1] + " " : "") + aliases.join(" ");
                 }
                 STATE.targetsAliasesInserted[genome] = true;
             }
@@ -771,12 +772,12 @@ async function getCellsSummaries({genome}={}) {
             if (!STATE.cellsAliasesInserted[genome]) {
                 let database = await getDatabase({genome});
                 for (let entry of database) {
-                    let minimalName = getEntryTargetName(entry[4][0]);
+                    let minimalName = getEntryTargetName(entry[5][0]);
                     let summary = cellsSummaries.get(minimalName);
                     if (!summary) continue;
                     let aliases = [summary.name, summary.full_name, ...summary.aliases]
                         .map(getEntryTargetName);
-                    entry[11][1] = (entry[11][1] ? entry[11][1] + " " : "") + aliases.join(" ");            
+                    entry[12][1] = (entry[12][1] ? entry[12][1] + " " : "") + aliases.join(" ");
                 }
                 STATE.cellsAliasesInserted[genome] = true;
             }
@@ -856,29 +857,38 @@ async function getDatabase({genome}={}) {
             // 12 -> 2 others columns added at the end for targets and cells aliases
             let lines = data.trimEnd().split("\n");
             data = new Array(lines.length);
+            // TSV columns (source order): 0 crossref, 1 runs, 2 srx, 3 genome,
+            // 4 cell, 5 target, 6 date, 7 title, 8 logs, 9 attributes.
+            // Row columns (app order): 0 crossref ids, 1 display id, 2 srx,
+            // 3 srr, 4 genome, 5 cell, 6 target, 7 date, 8 title, 9 logs,
+            // 10 attributes, 11 target aliases, 12 cell aliases.
             for (let i = 0; i < lines.length; i++) {
                 let cols = lines[i].split("\t");
-                let width = Math.max(12, cols.length);
-                let row = new Array(width);
-                for (let j = 0; j < width; j++) {
-                    let entry = j < cols.length ? cols[j] : "";
-                    if (j === 0) {
-                        row[j] = [unpackCrossref(entry), entry.toLowerCase()];
-                    } else if (j === 1) {
-                        row[j] = [unpackCrossref(entry, true), entry.toLowerCase()];
-                    } else if (j === 6) {
-                        row[j] = [entry, entry.replace(/\D+/g, " ")];
-                    } else if (j === 9) {
-                        row[j] = [entry, entry
-                            .toLowerCase()
-                            .split(/[;=]/)
-                            .map(y => y.replace(/[^\w()]+/g, ""))
-                            .join(" ")
-                        ];
-                    } else {
-                        row[j] = [entry, entry.toLowerCase().replace(/[^\w()]+/g, "")];
-                    }
-                }
+                // [display, searchable] for a plain text column
+                let std = (s) => [s, s.toLowerCase().replace(/[^\w()]+/g, "")];
+
+                let crossref = unpackCrossref(cols[0]);
+                let displayId = crossref.geoSeries || crossref.bioproject || "?";
+
+                let row = new Array(13);
+                row[0]  = [crossref, cols[0].toLowerCase()];                      // crossref ids (object)
+                row[1]  = [displayId, displayId.toLowerCase()];                   // primary display id
+                row[2]  = std(cols[2]);                                           // srx (experiment, unique key)
+                row[3]  = [unpackCrossref(cols[1], true), cols[1].toLowerCase()]; // srr (runs)
+                row[4]  = std(cols[3]);                                           // genome
+                row[5]  = std(cols[4]);                                           // cell
+                row[6]  = std(cols[5]);                                           // target
+                row[7]  = [cols[6], cols[6].replace(/\D+/g, " ")];                // date
+                row[8]  = std(cols[7]);                                           // title
+                row[9]  = std(cols[8]);                                           // logs
+                row[10] = [cols[9], cols[9]                                       // attributes
+                    .toLowerCase()
+                    .split(/[;=]/)
+                    .map(y => y.replace(/[^\w()]+/g, ""))
+                    .join(" ")
+                ];
+                row[11] = ["", ""];   // target aliases (filled in by getTargetsSummaries)
+                row[12] = ["", ""];   // cell aliases (filled in by getCellsSummaries)
                 data[i] = row;
             }
             resolve(data);
@@ -924,13 +934,13 @@ async function initSearchSamples() {
     targetsSummaries = await targetsSummaries;
     cellsSummaries = await cellsSummaries;
     let searchIndexes = {
-        ids: [0, 1, 2],
-        target: [5],
-        cell: [4],
-        aliases: [10, 11],
-        date: [6],
-        title: [7],
-        attributes: [9],
+        ids: [0, 2, 3],
+        target: [6],
+        cell: [5],
+        aliases: [11, 12],
+        date: [7],
+        title: [8],
+        attributes: [10],
     };
     let searchFields = Array.from(document.querySelectorAll("#search-fields-control > div[data-checked='true']"))
         .map(div => div.dataset.searchIn.split(",").map(x => x.trim().toLowerCase()))
@@ -1066,16 +1076,36 @@ async function initSearchSamples() {
     // Parse the query string
     let searchQuery = document.querySelector("#search").textContent;
     searchQuery = searchQuery.trim();
-    let results = database;
-    if (searchQuery.length !== 0) {
-        let queries = parseSearchQuery(searchQuery);
-        // Filter database
-        let matchFn = compileSearchQuery(queries);
-        results = database.filter(matchFn);
-    } else {
-        results = Array.from(database);
-    }
 
+    // Signature of this search, used to decide whether the previous result
+    // list can be reused as the filter source instead of the full database.
+    let fieldsKey = searchFieldsIndexes.join(",");
+    let flat = searchQuery.length > 0 && !/[()]/.test(searchQuery);
+    let terms = flat
+        ? searchQuery.split(/\s+/).map(t => t.toLowerCase().replace(/[^\w]+/g, "")).filter(Boolean)
+        : [];
+
+    let results;
+    if (searchQuery.length === 0) {
+        results = Array.from(database);
+    } else {
+        let matchFn = compileSearchQuery(parseSearchQuery(searchQuery));
+        // Reuse the previous (smaller) result list instead of scanning the
+        // whole database when the new search is provably a subset of it:
+        //   - same genome and same search fields, and
+        //   - both queries are flat conjunctions (no ( ) grouping / operators), and
+        //   - every previous term is a substring of some new term, i.e. each old
+        //     conjunct is implied by a new one, so newMatch(s) => oldMatch(s).
+        let prev = STATE.current.search;
+        let canNarrow = prev && prev.list
+            && prev.genome === genome
+            && prev.fieldsKey === fieldsKey
+            && prev.flat && flat
+            && prev.terms.every(ot => terms.some(nt => nt.includes(ot)));
+        let source = canNarrow ? prev.list : database;
+        results = source.filter(matchFn);
+    }
+    
     // Sort results
     let sortFn = (a, b) => {
         if (a === "?" || b === "?") {
@@ -1098,7 +1128,7 @@ async function initSearchSamples() {
     samplesDiv.textContent = "";
 
     let rowDiv = samplesDiv.appendChild(document.createElement("div"));
-    for (let [title, sortIndex] of [["Date", 6], ["IDs", 0], ["Target", 5], ["Cell", 4]]) {
+    for (let [title, sortIndex] of [["Date", 7], ["IDs", 1], ["Target", 6], ["Cell", 5]]) {
         let div = rowDiv.appendChild(document.createElement("div"));
         let titleDiv = div.appendChild(document.createElement("div"));
         div.appendChild(document.createElement("div"));
@@ -1122,6 +1152,8 @@ async function initSearchSamples() {
     document.querySelector("#samples-list-wrapper").scrollTop = 0;
     STATE.current.samples.div = samplesDiv;
     STATE.current.samples.list = results;
+    // Record this search so the next one can narrow from it when applicable.
+    STATE.current.search = {genome, fieldsKey, flat, terms, list: results};
     STATE.current.samples.count = 0;
     await showMoreSamples();
     await initListing();
@@ -1153,15 +1185,15 @@ async function showMoreSamples() {
         let rowDiv = STATE.current.samples.div.appendChild(document.createElement("div"));
         let itemDivs = makeItemsDivs(rowDiv);
 
-        itemDivs[0][0].textContent = sample[6][0];
+        itemDivs[0][0].textContent = sample[7][0];
         itemDivs[0][1].textContent = "+ Expand";
         itemDivs[0][1].style.color = "var(--desaturated-accent-color)";
         itemDivs[0][0].onclick = () => showFullSample({genome, key: sample[2][0]});
         itemDivs[0][1].onclick = () => showFullSample({genome, key: sample[2][0]});
-        itemDivs[1][0].textContent = sample[0][0].geoSeries || sample[0][0].bioproject || "?";
+        itemDivs[1][0].textContent = sample[1][0];
         itemDivs[1][1].textContent = sample[2][0];
-        itemDivs[2][0].textContent = sample[5][0].match(/^([^(]*).*$/)[1];
-        itemDivs[2][1].textContent = (sample[5][0].match(/^[^(]*\(([^(]*)\)$/) || ["", ""])[1];
+        itemDivs[2][0].textContent = sample[6][0].match(/^([^(]*).*$/)[1];
+        itemDivs[2][1].textContent = (sample[6][0].match(/^[^(]*\(([^(]*)\)$/) || ["", ""])[1];
         if (itemDivs[2][0].textContent.match(/^RNA polymerase ([IVX]+)$/i)) {
             itemDivs[2][0].textContent = "Pol " + itemDivs[2][0].textContent.match(/^RNA polymerase ([IVX]+)$/i)[1];
             itemDivs[2][1].textContent = "RNA polymerase";
@@ -1172,8 +1204,8 @@ async function showMoreSamples() {
             itemDivs[2][0].textContent = itemDivs[2][0].textContent.match(/^([^-]+)-Seq$/i)[1];
             itemDivs[2][1].textContent = "Seq";
         }
-        itemDivs[3][0].textContent = sample[4][0].match(/^([^(]*).*$/)[1];
-        itemDivs[3][1].textContent = (sample[4][0].match(/^[^(]*\(([^(]*)\)$/) || ["", ""])[1];
+        itemDivs[3][0].textContent = sample[5][0].match(/^([^(]*).*$/)[1];
+        itemDivs[3][1].textContent = (sample[5][0].match(/^[^(]*\(([^(]*)\)$/) || ["", ""])[1];
     }
 
     STATE.current.samples.count = targetIndex;
@@ -1192,11 +1224,11 @@ async function initListing() {
     // Update listing controls
     let uniques = {};
     let listingControlDiv = listingDiv.appendChild(document.createElement("div"));
-    for (let [label, value, entryIndex] of [["GSEs", "gse", 0], ["Targets", "targets", 5], ["Cells", "cells", 4]]) {
+    for (let [label, value, entryIndex] of [["GSEs", "gse", 0], ["Targets", "targets", 6], ["Cells", "cells", 5]]) {
         uniques[value] = new Map();
         if (value === "gse") {
             for (let entry of currentDatabase) {
-                uniques[value].set(entry[0][0].geoSeries || entry[0][0].bioproject || "?", entry);
+                uniques[value].set(entry[1][0], entry);
             }
         } else {
             for (let entry of currentDatabase) {
@@ -1227,7 +1259,7 @@ async function initListing() {
         STATE.current.listing.target = "gse";
         let resultsByGse = new Map();
         for (let entry of currentDatabase) {
-            let gse = entry[0][0].geoSeries || entry[0][0].bioproject || "?";
+            let gse = entry[1][0];
             if (!uniques["gse"].has(gse)) break;
             if (!resultsByGse.has(gse)) resultsByGse.set(gse, []);
             resultsByGse.get(gse).push(entry);
@@ -1260,11 +1292,11 @@ async function showMoreListing() {
             let entryNameDiv = div.appendChild(document.createElement("div"));
             let entrySummaryDiv = div.appendChild(document.createElement("div"));
 
-            let minimalName = getEntryTargetName(entry[5][1]);
+            let minimalName = getEntryTargetName(entry[6][1]);
             let summary = targetsSummaries.get(minimalName) || {};
 
             let entryLabelDiv = entryNameDiv.appendChild(document.createElement("span"));
-            entryLabelDiv.textContent = summary.name || entry[5][0];
+            entryLabelDiv.textContent = summary.name || entry[6][0];
             let entryAliasesDiv = entryNameDiv.appendChild(document.createElement("span"));
             entryAliasesDiv.textContent = [summary.full_name || "", ...(summary.aliases || [])]
                 .filter(x => x.length > 0)
@@ -1294,13 +1326,13 @@ async function showMoreListing() {
             let entryNameDiv = div.appendChild(document.createElement("div"));
             let entrySummaryDiv = div.appendChild(document.createElement("div"));
 
-            let minimalName = getEntryTargetName(entry[4][1]);
+            let minimalName = getEntryTargetName(entry[5][1]);
             let summary = cellsSummaries.get(minimalName) || {};
 
             let entryLabelDiv = entryNameDiv.appendChild(document.createElement("span"));
-            entryLabelDiv.textContent = entry[4][0].match(/^([^(]*).*$/)[1];
+            entryLabelDiv.textContent = entry[5][0].match(/^([^(]*).*$/)[1];
             let entryTissueDiv = entryNameDiv.appendChild(document.createElement("span"));
-            entryTissueDiv.textContent = (entry[4][0].match(/^[^(]*\(([^(]*)\)$/) || ["", ""])[1];
+            entryTissueDiv.textContent = (entry[5][0].match(/^[^(]*\(([^(]*)\)$/) || ["", ""])[1];
 
             if (STATE.display.summaries) {
                 let classDiv = entrySummaryDiv.appendChild(document.createElement("span"));
@@ -1318,7 +1350,7 @@ async function showMoreListing() {
                 descriptionDiv.appendChild(document.createElement("span")).textContent = " ";
                 
                 let entryExpandDiv = entrySummaryDiv.appendChild(document.createElement("a"));
-                entryExpandDiv.onclick = () => showCellSummary({genome, key: entry[4][0].match(/^([^(]*).*$/)[1].trim()});
+                entryExpandDiv.onclick = () => showCellSummary({genome, key: entry[5][0].match(/^([^(]*).*$/)[1].trim()});
                 entryExpandDiv.textContent = "Expand";
                 entryExpandDiv.classList.add("desaturated-color");
             }
@@ -1351,8 +1383,8 @@ async function showMoreListing() {
                 let targetsSet = new Map();
                 let cellsSet = new Map();
                 for (let entry of entries) {
-                    targetsSet.set(entry[5][0].match(/^([^(]*).*$/)[1].trim(), null);
-                    cellsSet.set(entry[4][0].match(/^([^(]*).*$/)[1].trim(), null);
+                    targetsSet.set(entry[6][0].match(/^([^(]*).*$/)[1].trim(), null);
+                    cellsSet.set(entry[5][0].match(/^([^(]*).*$/)[1].trim(), null);
                 }
                 let targetsDiv = detailsDiv.appendChild(document.createElement("div"));
                 targetsDiv.textContent = `${targetsSet.size} targets: ${Array.from(targetsSet.keys()).join(", ")}`;
@@ -1635,8 +1667,8 @@ async function showFullSample({genome, key, isNavigation=false}={}) {
     data = data.filter(x => x[2][0] === srx);
     if (data.length !== 1) throw new Error(`${srx} found 0 or multiple times in full database.`);
     data = data[0].map(x => x[0]);
-    data[8] = data[8] === "?" ? [] : data[8].split(",");
-    data[9] = data[9].split(";").map(x => x.split("="));
+    data[9] = data[9] === "?" ? [] : data[9].split(",");
+    data[10] = data[10].split(";").map(x => x.split("="));
 
     let [,, div] = initFullInfo({type: "sample", accession: {genome, key}, isNavigation});
     let fieldsDiv = div.appendChild(document.createElement("div"));
@@ -1660,20 +1692,20 @@ async function showFullSample({genome, key, isNavigation=false}={}) {
         data[2]}`;
     [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
     keyDiv.textContent = "Target";
-    valueDiv.textContent = data[5];
-    [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
-    keyDiv.textContent = "Cell";
-    valueDiv.textContent = data[4];
-    [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
-    keyDiv.textContent = "Date";
     valueDiv.textContent = data[6];
     [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
-    keyDiv.textContent = "Title";
+    keyDiv.textContent = "Cell";
+    valueDiv.textContent = data[5];
+    [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
+    keyDiv.textContent = "Date";
     valueDiv.textContent = data[7];
+    [keyDiv, valueDiv] = makeKeyValueDiv(fieldsDiv);
+    keyDiv.textContent = "Title";
+    valueDiv.textContent = data[8];
 
     [keyDiv, valueDiv] = makeKeyValueDiv(attributesDiv);
     keyDiv.textContent = "Attributes";
-    for (let [key, value] of data[9]) {
+    for (let [key, value] of data[10]) {
         [keyDiv, valueDiv] = makeKeyValueDiv(attributesDiv);
         keyDiv.textContent = key
             .replace(/_/g, " ")
@@ -1685,25 +1717,25 @@ async function showFullSample({genome, key, isNavigation=false}={}) {
     keyDiv.textContent = "Processing Logs";
     [keyDiv, valueDiv] = makeKeyValueDiv(logsDiv);
     keyDiv.textContent = "Sequencing";
-    valueDiv.textContent = `${formatNumber(data[8][0], {thousands: ","})} reads`;
-    if (data[5].toLowerCase() === "bisulfite-seq") {
+    valueDiv.textContent = `${formatNumber(data[9][0], {thousands: ","})} reads`;
+    if (data[6].toLowerCase() === "bisulfite-seq") {
         [keyDiv, valueDiv] = makeKeyValueDiv(logsDiv);
         keyDiv.textContent = "Mapping";
-        valueDiv.textContent = `${formatNumber(data[8][1], {thousands: ","})} %`;
+        valueDiv.textContent = `${formatNumber(data[9][1], {thousands: ","})} %`;
         [keyDiv, valueDiv] = makeKeyValueDiv(logsDiv);
         keyDiv.textContent = "Coverage";
-        valueDiv.textContent = `${formatNumber(data[8][2], {thousands: ","})} ×`;
+        valueDiv.textContent = `${formatNumber(data[9][2], {thousands: ","})} ×`;
         [keyDiv, valueDiv] = makeKeyValueDiv(logsDiv);
         keyDiv.textContent = "Hyper MR";;
-        valueDiv.textContent = `${formatNumber(data[8][3], {thousands: ","})} %`;
+        valueDiv.textContent = `${formatNumber(data[9][3], {thousands: ","})} %`;
     } else {
         [keyDiv, valueDiv] = makeKeyValueDiv(logsDiv);
         keyDiv.textContent = "Mapping";
-        valueDiv.textContent = `${formatNumber(data[8][1], {thousands: ","})} %`;
-        valueDiv.textContent += ` with ${formatNumber(data[8][2], {thousands: ","})} % duplicates`;
+        valueDiv.textContent = `${formatNumber(data[9][1], {thousands: ","})} %`;
+        valueDiv.textContent += ` with ${formatNumber(data[9][2], {thousands: ","})} % duplicates`;
         [keyDiv, valueDiv] = makeKeyValueDiv(logsDiv);
         keyDiv.textContent = "Peaks";
-        valueDiv.textContent = `${formatNumber(data[8][3], {thousands: ","})} below 1e-5`;
+        valueDiv.textContent = `${formatNumber(data[9][3], {thousands: ","})} below 1e-5`;
     }
 
     [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
@@ -1729,7 +1761,7 @@ async function showFullSample({genome, key, isNavigation=false}={}) {
             STATE.display.fullSampleSummaryFor = "ids";
             await showFullSample({genome, key: srx, isNavigation: true});
         };
-        let minimalName = getEntryTargetName(data[5]);
+        let minimalName = getEntryTargetName(data[6]);
         let targetsSummaries = await getTargetsSummaries({genome});
         let targetSummary = targetsSummaries.get(minimalName) || {};
         [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
@@ -1760,7 +1792,7 @@ async function showFullSample({genome, key, isNavigation=false}={}) {
             STATE.display.fullSampleSummaryFor = "ids";
             await showFullSample({genome, key: srx, isNavigation: true});
         };
-        let minimalName = getEntryTargetName(data[4]);
+        let minimalName = getEntryTargetName(data[5]);
         let cellsSummaries = await getCellsSummaries({genome});
         let cellSummary = cellsSummaries.get(minimalName) || {};
         [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
@@ -1806,7 +1838,7 @@ async function showFullSample({genome, key, isNavigation=false}={}) {
             ["Study", data[0].study || "?"],
             ["Experiment", srx || "?"],
             ["Sample", data[0].sample || "?"],
-            ["Runs", data[1].join(", ") || "?"],
+            ["Runs", data[3].join(", ") || "?"],
         ];
         for (let [key, value] of crossrefKeys) {
             [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
@@ -1886,12 +1918,12 @@ async function showFullSample({genome, key, isNavigation=false}={}) {
     keyDiv.textContent = "Processed";
     let processedDiv = valueDiv;
     let peaksDiv = processedDiv.appendChild(document.createElement("a"));
-    peaksDiv.href = `https://chip-atlas.dbcls.jp/data/${data[3]}/eachData/bed05/${srx}.05.bed`;
+    peaksDiv.href = `https://chip-atlas.dbcls.jp/data/${data[4]}/eachData/bed05/${srx}.05.bed`;
     peaksDiv.textContent = "Peaks";
     let bigwigDiv = processedDiv.appendChild(document.createElement("a"));
     let bigwigNameDiv = bigwigDiv.appendChild(document.createElement("span"));
     let bigwigSizeDiv = bigwigDiv.appendChild(document.createElement("span"));
-    bigwigDiv.href = `https://chip-atlas.dbcls.jp/data/${data[3]}/eachData/bw/${srx}.bw`;
+    bigwigDiv.href = `https://chip-atlas.dbcls.jp/data/${data[4]}/eachData/bw/${srx}.bw`;
     bigwigNameDiv.textContent = "Bigwig";
     setTimeout(async () => {
         let response = await fetchUrl(bigwigDiv.href, {method: "HEAD"});
@@ -1901,7 +1933,7 @@ async function showFullSample({genome, key, isNavigation=false}={}) {
     }, 0);
 
     [keyDiv, valueDiv] = makeKeyValueDiv(linksDiv);
-    let targetSearchTerm  = data[5].match(/^([^(]*).*$/)[1].trim();
+    let targetSearchTerm  = data[6].match(/^([^(]*).*$/)[1].trim();
     keyDiv.textContent = targetSearchTerm;
     let ncbiDiv = valueDiv.appendChild(document.createElement("a"));
     ncbiDiv.href = `https://www.ncbi.nlm.nih.gov/gene/?term=${encodeURIComponent(targetSearchTerm)}`;
