@@ -36,6 +36,7 @@
                 --desaturated-color: oklch(70.7% 0.022 261.325);
                 --highly-desaturated-color: oklch(92.8% 0.006 264.531);
                 --desaturated-accent-color: oklch(73.941% 0.08383 246.922);
+                --shadow-color: rgba(0, 0, 0, 0.12);
                 --error-color: oklch(58.6% 0.253 17.585);
             }
 
@@ -177,8 +178,9 @@
                 appearance: base-select;
                 margin-top: 6px;
                 margin-bottom: 6px;
-                padding: 12px 12px 12px 0;
-                box-shadow: 0 6px 12px -6px var(--desaturated-color);
+                padding: 12px 12px 12px 4px;
+                /* box-shadow: 0 6px 12px -6px var(--desaturated-color); */
+                box-shadow: 4px 4px 0 var(--shadow-color);
 
                 opacity: 0;
                 transform: translateY(-6px);
@@ -231,12 +233,12 @@
                 justify-content: flex-start;
                 align-items: center;
                 background-color: rgba(255, 255, 255, 0.6);
-                backdrop-filter: blur(8px);
-                -webkit-backdrop-filter: blur(8px);
+                backdrop-filter: blur(6px);
+                -webkit-backdrop-filter: blur(6px);
                 z-index: 999;
                 opacity: 0;
                 visibility: hidden;
-                transition: opacity 0.3s ease, visibility 0s linear 0.3s;
+                transition: opacity 0.2s ease, visibility 0s linear 0.2s;
             }
             #loading-overlay::before {
                 content: "";
@@ -245,7 +247,7 @@
             #loading-overlay.visible {
                 opacity: 1;
                 visibility: visible;
-                transition: opacity 0.3s ease, visibility 0s linear 0s;
+                transition: opacity 0.2s ease, visibility 0s linear 0s;
             }
             #loading-overlay > div:nth-child(2) {
                 color: var(--error-color);
@@ -334,7 +336,11 @@
                 row-gap: 10px;
             }
 
-            #controls > div:not(#search-control) {
+            #controls .control-title {
+                font-weight: var(--font-weight-bold);
+            }
+
+            #controls > :not(#search-control) {
                 display: flex;
                 flex-direction: row;
                 column-gap: 10px;
@@ -464,18 +470,21 @@
                 margin-bottom: 10px;
             }
 
-            #full-sample .key-value-pair > div:first-child {
+            #full-sample .key-value-pair > :first-child {
                 display: inline;
                 font-weight: var(--font-weight-bold);
-                margin-right: 10px;
             }
-            #full-sample .key-value-pair > div:nth-child(2) {
+            #full-sample .key-value-pair > :nth-child(2) {
+                display: inline;
+                margin-right: calc(10px - 0.25em);
+            }
+            #full-sample .key-value-pair > :nth-child(3) {
                 display: inline;
             }
-            #full-sample .key-value-pair > div:nth-child(2) > :not(:last-child) {
+            #full-sample .key-value-pair > :nth-child(3) > :not(:last-child) {
                 margin-right: 10px;
             }
-            #full-sample .key-value-pair > div:empty {
+            #full-sample .key-value-pair > :empty {
                 display: none;
             }
 
@@ -492,7 +501,7 @@
                 <div id="panel">
                     <div id="controls">
                         <div>
-                            <div>Display:</div>
+                            <div class="control-title">Display</div>
                             <div
                                 class="checkbox"
                                 id="toggle-summaries"
@@ -502,10 +511,10 @@
                             >Summaries</div>
                         </div>
                         <div id="genome-control">
-                            <div>Genome:</div>
+                            <div class="control-title">Genome</div>
                         </div>
                         <div id="search-fields-control">
-                            <div>Search in:</div>
+                            <div class="control-title">Search in</div>
                             <div class="checkbox" data-checked="true" data-search-in="ids" title="Samples GSE, GSM, SRX...">IDs</div>
                             <div class="checkbox" data-checked="true" data-search-in="target" title="Samples target">Target</div>
                             <div class="checkbox" data-checked="true" data-search-in="cell" title="Samples cell">Cell</div>
@@ -520,7 +529,7 @@
                             <div class="checkbox" data-search-in="attributes" title="Sample attributes">Attributes</div>
                         </div>
                         <div id="search-control" title='Search terms, may includes modifiers and/or/xor/not, eg: "att20 pax7" "att20 (or: pax7 tpit)" "(and: att20 (or: pax7 tpit) (not: SRX2463201))"'>
-                            <div>Search:</div>
+                            <div class="control-title">Search</div>
                             <div id="search" contenteditable="plaintext-only" oninput="searchSamples()"></div>
                             <div id="search-count"></div>
                         </div>
@@ -1440,7 +1449,9 @@ function makeKeyValueDiv(parent, {fieldClasses=[]}={}) {
     }
     fieldDiv.classList.add("key-value-pair");
     let keyDiv = fieldDiv.appendChild(document.createElement("div"));
+    let spaceDiv = fieldDiv.appendChild(document.createElement("div"));
     let valueDiv = fieldDiv.appendChild(document.createElement("div"));
+    spaceDiv.textContent = " ";
     return [keyDiv, valueDiv];
 }
 async function toggleMoreInfo(moreInfoHeaderDiv, moreInfoDiv, div, openFunction) {
