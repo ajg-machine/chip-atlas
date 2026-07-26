@@ -1247,16 +1247,10 @@ async function initListing() {
     // Update listing controls
     let uniques = {};
     let listingControlDiv = listingDiv.appendChild(document.createElement("div"));
-    for (let [label, value, entryIndex] of [["GSEs", "gse", 0], ["Targets", "targets", 6], ["Cells", "cells", 5]]) {
+    for (let [label, value, entryIndex] of [["Studies", "studies", 1], ["Targets", "targets", 6], ["Cells", "cells", 5]]) {
         uniques[value] = new Map();
-        if (value === "gse") {
-            for (let entry of currentDatabase) {
-                uniques[value].set(entry[1][0], entry);
-            }
-        } else {
-            for (let entry of currentDatabase) {
-                uniques[value].set(entry[entryIndex][0], entry);
-            }
+        for (let entry of currentDatabase) {
+            uniques[value].set(entry[entryIndex][0], entry);
         }
         let div = listingControlDiv.appendChild(document.createElement("div"));
         div.textContent = `${label} (${formatNumber(uniques[value].size, {thousands: ","})})`;
@@ -1278,17 +1272,16 @@ async function initListing() {
     } else if (STATE.display.listing === "cells") {
         STATE.current.listing.target = "cells";
         STATE.current.listing.list = Array.from(uniques["cells"].values());
-    } else if (STATE.display.listing === "gse") {
-        STATE.current.listing.target = "gse";
-        let resultsByGse = new Map();
+    } else if (STATE.display.listing === "studies") {
+        STATE.current.listing.target = "studies";
+        let resultsByStudy = new Map();
         for (let entry of currentDatabase) {
-            let gse = entry[1][0];
-            if (!uniques["gse"].has(gse)) break;
-            if (!resultsByGse.has(gse)) resultsByGse.set(gse, []);
-            resultsByGse.get(gse).push(entry);
-            if (resultsByGse.size >= STATE.display.listingCount) break;
+            let study = entry[1][0];
+            if (!uniques["studies"].has(study)) break;
+            if (!resultsByStudy.has(study)) resultsByStudy.set(study, []);
+            resultsByStudy.get(study).push(entry);
         }
-        STATE.current.listing.list = Array.from(resultsByGse.entries());
+        STATE.current.listing.list = Array.from(resultsByStudy.entries());
     } else {
         STATE.current.listing.target = null;
         STATE.current.listing.list = null;
@@ -1379,27 +1372,27 @@ async function showMoreListing() {
             }
         }
         
-    } else if (STATE.current.listing.target === "gse") {
+    } else if (STATE.current.listing.target === "studies") {
         for (let index = currentIndex; index < targetIndex; index++) {
-            let [gse, entries] = STATE.current.listing.list[index];
+            let [studyId, entries] = STATE.current.listing.list[index];
             let div = STATE.current.listing.div.appendChild(document.createElement("div"));
-            let gseDiv = div.appendChild(document.createElement("div"));
-            let gseLabelDiv = gseDiv.appendChild(document.createElement("span"));
-            gseLabelDiv.textContent = gse;
-            let gseCountLinkDiv = gseDiv.appendChild(document.createElement("span"));
-            gseCountLinkDiv.style.display = "inline-flex";
-            gseCountLinkDiv.style.gap = "10px";
-            let gseCountDiv = gseCountLinkDiv.appendChild(document.createElement("span"));
-            gseCountDiv.textContent = `${formatNumber(entries.length, {thousands: ","})} samples`;
-            let gseLinkDiv = gseCountLinkDiv.appendChild(document.createElement("a"));
-            if (gse.startsWith("G")) {
-                gseLinkDiv.textContent = "GEO";
-                gseLinkDiv.href = `https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=${gse}`;
+            let studyDiv = div.appendChild(document.createElement("div"));
+            let studyLabelDiv = studyDiv.appendChild(document.createElement("span"));
+            studyLabelDiv.textContent = studyId;
+            let studyCountLinkDiv = studyDiv.appendChild(document.createElement("span"));
+            studyCountLinkDiv.style.display = "inline-flex";
+            studyCountLinkDiv.style.gap = "10px";
+            let studyCountDiv = studyCountLinkDiv.appendChild(document.createElement("span"));
+            studyCountDiv.textContent = `${formatNumber(entries.length, {thousands: ","})} samples`;
+            let studyLinkDiv = studyCountLinkDiv.appendChild(document.createElement("a"));
+            if (studyId.startsWith("G")) {
+                studyLinkDiv.textContent = "GEO";
+                studyLinkDiv.href = `https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=${studyId}`;
             } else {
-                gseLinkDiv.textContent = "ENA";
-                gseLinkDiv.href = `https://www.ebi.ac.uk/ena/browser/view/${gse}`;
+                studyLinkDiv.textContent = "ENA";
+                studyLinkDiv.href = `https://www.ebi.ac.uk/ena/browser/view/${studyId}`;
             }
-            gseLinkDiv.target = "_blank";
+            studyLinkDiv.target = "_blank";
 
             if (STATE.display.summaries) {
                 let detailsDiv = div.appendChild(document.createElement("div"));
@@ -1454,6 +1447,26 @@ function makeKeyValueDiv(parent, {fieldClasses=[]}={}) {
     spaceDiv.textContent = " ";
     return [keyDiv, valueDiv];
 }
+function fillKeyValueDivValue(div, value) {
+    // string, number -> show as text
+    // list -> recursively show each item seprated by commas
+    // object -> recursively show as key-value pairs (key: value)
+    let toString = (value) => {
+        if (Array.isArray(value)) {
+            return value.map(toString).join(", ");
+        } else if (typeof value === "object" && value !== null) {
+            let pairs = [];
+            for (let [key, val] of Object.entries(value)) {
+                pairs.push(`${key}: ${toString(val)}`);
+            }
+            return pairs.join(", ");
+        } else {
+            return value;
+        }
+    };
+    div.textContent = toString(value);
+}
+
 async function toggleMoreInfo(moreInfoHeaderDiv, moreInfoDiv, div, openFunction) {
     let divOpened = div.dataset.opened === "true";
     moreInfoDiv.textContent = "";
@@ -1763,29 +1776,28 @@ async function showFullSample({genome, key, isNavigation=false}={}) {
         valueDiv.textContent = `${formatNumber(data[9][3], {thousands: ","})} below 1e-5`;
     }
 
+    let infoCategories = [["Target", "target"], ["Cell", "cell"], ["IDs", "ids"], ["Study", "study"], ["Sample", "sample"]];
     [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
-    let targetCellSwitchDiv = keyDiv.appendChild(document.createElement("span"));
-    let targetSwitchType = STATE.display.fullSampleSummaryFor === "target" ? "span" : "a";
-    let targetSwitchDiv = targetCellSwitchDiv.appendChild(document.createElement(targetSwitchType));
-    targetSwitchDiv.textContent = "Target";
-    targetCellSwitchDiv.appendChild(document.createTextNode(" | "));
-    let cellSwitchType = STATE.display.fullSampleSummaryFor === "cell" ? "span" : "a";
-    let cellSwitchDiv = targetCellSwitchDiv.appendChild(document.createElement(cellSwitchType));
-    cellSwitchDiv.textContent = "Cell";
-    targetCellSwitchDiv.appendChild(document.createTextNode(" | "));
-    let idsSwitchType = STATE.display.fullSampleSummaryFor === "ids" ? "span" : "a";
-    let idsSwitchDiv = targetCellSwitchDiv.appendChild(document.createElement(idsSwitchType));
-    idsSwitchDiv.textContent = "IDs";
-    targetCellSwitchDiv.appendChild(document.createTextNode(" Summary"));
+    let infoSwitchDiv = keyDiv.appendChild(document.createElement("span"));
+    for (let index = 0; index < infoCategories.length; index++) {
+        let [name, key] = infoCategories[index];
+        if (STATE.display.fullSampleSummaryFor === key) {
+            let span = infoSwitchDiv.appendChild(document.createElement("span"));
+            span.textContent = name;
+        } else {
+            let a = infoSwitchDiv.appendChild(document.createElement("a"));
+            a.textContent = name;
+            a.onclick = async () => {
+                STATE.display.fullSampleSummaryFor = key;
+                await showFullSample({genome, key: srx, isNavigation: true});
+            };
+        }
+        if (index < infoCategories.length - 1) {
+            infoSwitchDiv.appendChild(document.createTextNode(" | "));
+        }
+    }
+    infoSwitchDiv.appendChild(document.createTextNode(" Summary"));
     if (STATE.display.fullSampleSummaryFor === "target") {
-        cellSwitchDiv.onclick = async () => {
-            STATE.display.fullSampleSummaryFor = "cell";
-            await showFullSample({genome, key: srx, isNavigation: true});
-        };
-        idsSwitchDiv.onclick = async () => {
-            STATE.display.fullSampleSummaryFor = "ids";
-            await showFullSample({genome, key: srx, isNavigation: true});
-        };
         let minimalName = getEntryTargetName(data[6]);
         let targetsSummaries = await getTargetsSummaries({genome});
         let targetSummary = targetsSummaries.get(minimalName) || {};
@@ -1809,14 +1821,6 @@ async function showFullSample({genome, key, isNavigation=false}={}) {
         targetDescriptionExpandDiv.textContent = "Expand";
         targetDescriptionExpandDiv.onclick = () => showTargetSummary({genome, key: targetSummary.name});
     } else if (STATE.display.fullSampleSummaryFor === "cell") {
-        targetSwitchDiv.onclick = async () => {
-            STATE.display.fullSampleSummaryFor = "target";
-            await showFullSample({genome, key: srx, isNavigation: true});
-        };
-        idsSwitchDiv.onclick = async () => {
-            STATE.display.fullSampleSummaryFor = "ids";
-            await showFullSample({genome, key: srx, isNavigation: true});
-        };
         let minimalName = getEntryTargetName(data[5]);
         let cellsSummaries = await getCellsSummaries({genome});
         let cellSummary = cellsSummaries.get(minimalName) || {};
@@ -1846,14 +1850,6 @@ async function showFullSample({genome, key, isNavigation=false}={}) {
         cellDescriptionExpandDiv.textContent = "Expand";
         cellDescriptionExpandDiv.onclick = () => showCellSummary({genome, key: cellSummary.name.match(/^([^(]*).*$/)[1]});
     } else if (STATE.display.fullSampleSummaryFor === "ids") {
-        targetSwitchDiv.onclick = async () => {
-            STATE.display.fullSampleSummaryFor = "target";
-            await showFullSample({genome, key: srx, isNavigation: true});
-        };
-        cellSwitchDiv.onclick = async () => {
-            STATE.display.fullSampleSummaryFor = "cell";
-            await showFullSample({genome, key: srx, isNavigation: true});
-        };
         let crossrefKeys = [
             ["GEO Series", data[0].geoSeries || "?"],
             ["GEO Sample", data[0].geoSample || "?"],
@@ -1886,6 +1882,52 @@ async function showFullSample({genome, key, isNavigation=false}={}) {
                     linkValueDiv.href = `https://www.ebi.ac.uk/ena/browser/view/${value}`;
                     linkValueDiv.target = "_blank";
                 }
+            }
+        }
+    } else if (STATE.display.fullSampleSummaryFor === "study") {
+        let studyId = data[0].bioproject || "?";
+        if (studyId === "?") {
+            [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
+            keyDiv.textContent = "Error";
+            valueDiv.textContent = "No study ID available";
+        } else {
+            try {
+                let url = `https://www.ebi.ac.uk/ena/browser/api/xml/${studyId}`;
+                let response = await fetchUrl(url);
+                let responseData = await response.text();
+                let parsedData = ENAUtil.parseEnaProjectXml(responseData);
+                for (let [key, value] of Object.entries(parsedData)) {
+                    [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
+                    keyDiv.textContent = key;
+                    fillKeyValueDivValue(valueDiv, value);
+                }
+            } catch (e) {
+                [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
+                keyDiv.textContent = "Error";
+                valueDiv.textContent = `Failed to fetch study info for ${studyId}`;
+            }
+        }
+    } else if (STATE.display.fullSampleSummaryFor === "sample") {
+        let sampleId = data[0].biosample || "?";
+        if (sampleId === "?") {
+            [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
+            keyDiv.textContent = "Error";
+            valueDiv.textContent = "No sample ID available.";
+        } else {
+            try {
+                let url = `https://www.ebi.ac.uk/ena/browser/api/xml/${sampleId}`;
+                let response = await fetchUrl(url);
+                let responseData = await response.text();
+                let parsedData = ENAUtil.parseEnaSampleXml(responseData);
+                for (let [key, value] of Object.entries(parsedData)) {
+                    [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
+                    keyDiv.textContent = key;
+                    fillKeyValueDivValue(valueDiv, value);
+                }
+            } catch (e) {
+                [keyDiv, valueDiv] = makeKeyValueDiv(summaryDiv);
+                keyDiv.textContent = "Error";
+                valueDiv.textContent = `Failed to fetch sample info for ${sampleId}`;
             }
         }
     }
@@ -2023,6 +2065,213 @@ function uniquesInArray(array) {
     return uniqueArray;
 }
 
+
+let ENAUtil = (() => {
+
+    /**
+     * Parsers for ENA (European Nucleotide Archive) XML records, converting them
+     * into plain JSON objects suitable for UI display.
+     *
+     * Both functions take the raw XML file content as a string and use the
+     * browser's built-in DOMParser, so they are meant to run in a browser or
+     * browser-like (e.g. artifact) environment, not Node.js directly.
+     */
+
+    /** Get the trimmed text content of the first matching child element, or null. */
+    function getText(parent, tagName) {
+        if (!parent) return null;
+        const el = parent.getElementsByTagName(tagName)[0];
+        return el ? el.textContent.trim() : null;
+    }
+
+    /** Get all matching child elements as an array (direct or nested). */
+    function getAll(parent, tagName) {
+        if (!parent) return [];
+        return Array.from(parent.getElementsByTagName(tagName));
+    }
+
+    function parseXmlString(xmlString) {
+        const parser = new DOMParser();
+        const doc = parser.parseFromString(xmlString, 'application/xml');
+        const errorNode = doc.getElementsByTagName('parsererror')[0];
+        if (errorNode) {
+            throw new Error('Failed to parse XML: ' + errorNode.textContent.trim());
+        }
+        return doc;
+    }
+
+    /**
+     * Parse an ENA PROJECT_SET XML document (e.g. PRJNA940723.xml) into JSON.
+     *
+     * @param {string} xmlString - Raw XML file content.
+     * @returns {Object} Parsed project record, e.g.:
+     * {
+     *   accession, alias, centerName, brokerName, name, title, description,
+     *   identifiers: { primaryId, secondaryIds: [], externalIds: [{namespace, id}], submitterIds: [{namespace, id}] },
+     *   organism: { taxonId, scientificName },
+     *   relatedProjects: [accession, ...],
+     *   links: [{ db, id }],
+     *   attributes: [{ tag, value }]
+     * }
+     */
+    function parseEnaProjectXml(xmlString) {
+        const doc = parseXmlString(xmlString);
+        const project = doc.getElementsByTagName('PROJECT')[0];
+        if (!project) {
+            throw new Error('No PROJECT element found in XML');
+        }
+
+        const identifiersEl = project.getElementsByTagName('IDENTIFIERS')[0];
+        /*
+        const identifiers = {
+            primaryId: getText(identifiersEl, 'PRIMARY_ID'),
+            secondaryIds: getAll(identifiersEl, 'SECONDARY_ID').map((el) => el.textContent.trim()),
+            externalIds: getAll(identifiersEl, 'EXTERNAL_ID').map((el) => ({
+                namespace: el.getAttribute('namespace'),
+                id: el.textContent.trim(),
+            })),
+            submitterIds: getAll(identifiersEl, 'SUBMITTER_ID').map((el) => ({
+                namespace: el.getAttribute('namespace'),
+                id: el.textContent.trim(),
+            })),
+        };
+        */
+        let accessions = [];
+        accessions.push(project.getAttribute('accession'));
+        accessions.push(project.getAttribute('alias'));
+        accessions.push(getText(identifiersEl, 'PRIMARY_ID'));
+        accessions.push(...getAll(identifiersEl, 'SECONDARY_ID').map((el) => el.textContent.trim()));
+        accessions.push(...getAll(identifiersEl, 'EXTERNAL_ID').map((el) => el.textContent.trim()));
+        accessions = accessions.filter(x => x != null && x !== "");
+        accessions = uniquesInArray(accessions);
+
+        const organismEl = project.getElementsByTagName('ORGANISM')[0];
+        const organism = organismEl
+            ? {
+                "Organism Taxon ID": getText(organismEl, 'TAXON_ID'),
+                "Organism Name": getText(organismEl, 'SCIENTIFIC_NAME'),
+            }
+            : null;
+
+        const relatedProjects = getAll(project, 'PARENT_PROJECT').map((el) => el.getAttribute('accession'));
+
+        const links = getAll(project, 'XREF_LINK').map((el) => ({
+            db: getText(el, 'DB'),
+            id: getText(el, 'ID'),
+        }));
+        let pubmedLink = Object.entries(links).find(([_, link]) => link.db === 'PUBMED');
+        if (pubmedLink) {
+            pubmedLink = {"Pubmed": pubmedLink[1].id};
+        } else {
+            pubmedLink = {};
+        }
+
+        const attributes = Object.fromEntries(getAll(project, 'PROJECT_ATTRIBUTE').map((el) => [
+            getText(el, 'TAG'),
+            getText(el, 'VALUE')
+        ]));
+
+        return {
+            //Accession: project.getAttribute('accession'),
+            //Alias: project.getAttribute('alias'),
+            Accessions: accessions,
+            "Center Name": project.getAttribute('center_name'),
+            //brokerName: project.getAttribute('broker_name'),
+            Name: getText(project, 'NAME'),
+            Title: getText(project, 'TITLE'),
+            Description: getText(project, 'DESCRIPTION'),
+            //Identifiers: identifiers,
+            ...organism,
+            "Related Projects": relatedProjects,
+            //links,
+            ...pubmedLink,
+            ...attributes,
+        };
+    }
+
+    /**
+     * Parse an ENA SAMPLE_SET XML document (e.g. SAMN33578617.xml) into JSON.
+     *
+     * @param {string} xmlString - Raw XML file content.
+     * @returns {Object} Parsed sample record, e.g.:
+     * {
+     *   accession, alias, centerName, brokerName, title,
+     *   identifiers: { primaryId, secondaryIds: [], externalIds: [{namespace, id}], submitterIds: [{namespace, id}] },
+     *   organism: { taxonId, scientificName, commonName },
+     *   links: [{ db, id }],
+     *   attributes: [{ tag, value }]
+     * }
+     */
+    function parseEnaSampleXml(xmlString) {
+        const doc = parseXmlString(xmlString);
+        const sample = doc.getElementsByTagName('SAMPLE')[0];
+        if (!sample) {
+            throw new Error('No SAMPLE element found in XML');
+        }
+
+        const identifiersEl = sample.getElementsByTagName('IDENTIFIERS')[0];
+        /*
+        const identifiers = {
+            primaryId: getText(identifiersEl, 'PRIMARY_ID'),
+            secondaryIds: getAll(identifiersEl, 'SECONDARY_ID').map((el) => el.textContent.trim()),
+            externalIds: getAll(identifiersEl, 'EXTERNAL_ID').map((el) => ({
+                namespace: el.getAttribute('namespace'),
+                id: el.textContent.trim(),
+            })),
+            submitterIds: getAll(identifiersEl, 'SUBMITTER_ID').map((el) => ({
+                namespace: el.getAttribute('namespace'),
+                id: el.textContent.trim(),
+            })),
+        };
+        */
+       let accessions = [];
+       accessions.push(sample.getAttribute('accession'));
+       accessions.push(sample.getAttribute('alias'));
+       accessions.push(getText(identifiersEl, 'PRIMARY_ID'));
+       accessions.push(...getAll(identifiersEl, 'SECONDARY_ID').map((el) => el.textContent.trim()));
+       accessions.push(...getAll(identifiersEl, 'EXTERNAL_ID').map((el) => el.textContent.trim()));
+       accessions = accessions.filter(x => x != null && x !== "");
+       accessions = uniquesInArray(accessions);
+
+        const sampleNameEl = sample.getElementsByTagName('SAMPLE_NAME')[0];
+        const organism = sampleNameEl
+            ? {
+                "Organism Taxon ID": getText(sampleNameEl, 'TAXON_ID'),
+                "Organism Name": getText(sampleNameEl, 'SCIENTIFIC_NAME'),
+                "Organism Common Name": getText(sampleNameEl, 'COMMON_NAME'),
+            }
+            : null;
+
+        const links = getAll(sample, 'XREF_LINK').map((el) => ({
+            db: getText(el, 'DB'),
+            id: getText(el, 'ID'),
+        }));
+
+        const attributes = Object.fromEntries(getAll(sample, 'SAMPLE_ATTRIBUTE').map((el) => [
+            getText(el, 'TAG'),
+            getText(el, 'VALUE'),
+        ]));
+
+        return {
+            //Accession: sample.getAttribute('accession'),
+            //Alias: sample.getAttribute('alias'),
+            Accessions: accessions,
+            "Center Name": sample.getAttribute('center_name'),
+            //brokerName: sample.getAttribute('broker_name'),
+            Title: getText(sample, 'TITLE'),
+            //Identifiers: identifiers,
+            ...organism,
+            //links,
+            ...attributes,
+        };
+    }
+
+    return {
+        parseEnaProjectXml,
+        parseEnaSampleXml,
+    };
+
+})();
 
 
 async function main() {
