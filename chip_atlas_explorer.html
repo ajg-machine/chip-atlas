@@ -488,6 +488,144 @@
                 display: none;
             }
 
+            #download-control {
+                cursor: pointer;
+            }
+            #download-control:hover {
+                color: var(--accent-color);
+            }
+            #download-control[data-error="true"]::before {
+                color: var(--error-color);
+            }
+
+            #download-modal {
+                display: none;
+                position: absolute;
+                inset: 0;
+                z-index: 1000;
+                justify-content: center;
+                align-items: center;
+                background-color: rgba(255, 255, 255, 0.6);
+                backdrop-filter: blur(6px);
+                -webkit-backdrop-filter: blur(6px);
+            }
+            #download-modal[data-visible="true"] {
+                display: flex;
+            }
+            #download-modal > .panel {
+                display: flex;
+                flex-direction: column;
+                width: 50dvw;
+                max-height: 66dvh;
+                background: white;
+                border: 1px solid black;
+                box-shadow: 4px 4px 0 var(--shadow-color);
+            }
+            #download-modal > .panel > .control {
+                display: flex;
+                flex-direction: row;
+                align-items: center;
+                gap: 15px;
+                padding: 20px;
+                border-bottom: 1px dotted black;
+            }
+            #download-modal > .panel > .control > :first-child {
+                font-weight: var(--font-weight-bold);
+                margin-right: auto;
+            }
+            #download-modal > .panel > .list {
+                display: flex;
+                flex-direction: column;
+                gap: 15px;
+                padding: 20px;
+                overflow-y: auto;
+            }
+            #download-modal > .panel > .list:empty::after {
+                content: "No download yet";
+                color: var(--desaturated-color);
+            }
+
+            #download-modal .task {
+                display: flex;
+                flex-direction: column;
+                gap: 5px;
+            }
+            #download-modal .task > .header {
+                display: flex;
+                flex-direction: row;
+                align-items: baseline;
+                gap: 10px;
+            }
+            #download-modal .task > .header > .name {
+                font-weight: var(--font-weight-bold);
+                word-break: break-all;
+                margin-right: auto;
+            }
+            #download-modal .task > .header > .percent {
+                white-space: nowrap;
+                color: var(--desaturated-color);
+            }
+            #download-modal .task[data-status="error"] > .header > .percent {
+                color: var(--error-color);
+            }
+            #download-modal .task > .bar {
+                height: 4px;
+                background: var(--highly-desaturated-color);
+                overflow: hidden;
+            }
+            #download-modal .task > .bar > div {
+                width: 0%;
+                height: 100%;
+                background: var(--accent-color);
+                transition: width 0.2s linear;
+            }
+            #download-modal .task[data-status="error"] > .bar > div {
+                background: var(--error-color);
+            }
+            #download-modal .task[data-status="cancelled"] > .bar > div {
+                background: var(--desaturated-color);
+            }
+            #download-modal .task[data-indeterminate="true"] > .bar > div {
+                width: 33%;
+                transition: none;
+                animation: downloadIndeterminate 1.2s ease-in-out infinite;
+            }
+            @keyframes downloadIndeterminate {
+                from { transform: translateX(-110%); }
+                to { transform: translateX(310%); }
+            }
+            #download-modal .task > .details {
+                display: flex;
+                flex-direction: row;
+                align-items: center;
+                gap: 15px;
+                font-size: 85%;
+                color: var(--desaturated-color);
+            }
+            #download-modal .task > .details > .status {
+                margin-right: auto;
+                word-break: break-word;
+            }
+            #download-modal .task[data-status="error"] > .details > .status {
+                color: var(--error-color);
+            }
+            #download-modal .task > .details > .cancel,
+            #download-modal .task > .details > .retry,
+            #download-modal .task > .details > .remove {
+                display: none;
+                color: var(--accent-color);
+                white-space: nowrap;
+            }
+            #download-modal .task[data-status="downloading"] > .details > .cancel,
+            #download-modal .task[data-status="error"] > .details > .retry,
+            #download-modal .task[data-status="cancelled"] > .details > .retry,
+            #download-modal .task:not([data-status="downloading"]) > .details > .remove {
+                display: flex;
+            }
+            #download-modal .task > .details > :is(.cancel, .retry, .remove):hover {
+                text-decoration: underline;
+            }
+
 
         </style>
     </head>
@@ -509,6 +647,13 @@
                                 data-checked="true"
                                 title="Toggle display of entries summaries in listing"
                             >Summaries</div>
+                            <div
+                                class="symbol-left symbol-colored"
+                                id="download-control"
+                                data-symbol="download"
+                                onclick="STATE.downloader.showModal()"
+                                title="Show downloads"
+                            ><span id="current-download-count">0</span>&nbsp;<span id="current-download-label">Downloads</span></div>
                         </div>
                         <div id="genome-control">
                             <div class="control-title">Genome</div>
@@ -537,6 +682,16 @@
                     <div id="listing"></div>
                     <div id="full-sample"></div>
                 </div>
+                <div id="download-modal">
+                    <div class="panel">
+                        <div class="control">
+                            <div>Downloads</div>
+                            <div class="symbol-left symbol-colored" id="download-modal-clear" data-symbol="delete_sweep">Clear finished</div>
+                            <div class="symbol-left symbol-colored" id="download-modal-close" data-symbol="close">Close</div>
+                        </div>
+                        <div class="list"></div>
+                    </div>
+                </div>
                 <div id="loading-overlay" class="visible">
                     <div></div>
                     <div></div>
@@ -551,6 +706,7 @@
 
 let BASE_URL = "https://cdn.jsdelivr.net/gh/ajg-machine/chip-atlas@main";
 let STATE = {
+    downloader: null,
     genome: {selected: "mm10", available: null},
     database: {},
     targetsSummaries: {},
@@ -1987,6 +2143,31 @@ async function showFullSample({genome, key, isNavigation=false}={}) {
     let peaksDiv = processedDiv.appendChild(document.createElement("a"));
     peaksDiv.href = `https://chip-atlas.dbcls.jp/data/${data[4]}/eachData/bed05/${srx}.05.bed`;
     peaksDiv.textContent = "Peaks";
+    let peaksFilename = `${data[6].match(/^([^(]*).*$/)[1].trim()}_${data[5].match(/^([^(]*).*$/)[1].trim()}_${srx}.05.bed`;
+    peaksDiv.addEventListener("click", event => {
+        if (!window.showSaveFilePicker) return;  // let the browser download it natively
+        event.preventDefault();
+        STATE.downloader.download(peaksDiv.href, {name: peaksFilename});
+    });
+
+    let bigwigDiv = processedDiv.appendChild(document.createElement("a"));
+    let bigwigNameDiv = bigwigDiv.appendChild(document.createElement("span"));
+    let bigwigSizeDiv = bigwigDiv.appendChild(document.createElement("span"));
+    bigwigDiv.href = `https://chip-atlas.dbcls.jp/data/${data[4]}/eachData/bw/${srx}.bw`;
+    bigwigNameDiv.textContent = "Bigwig";
+    let bigwigFilename = `${data[6].match(/^([^(]*).*$/)[1].trim()}_${data[5].match(/^([^(]*).*$/)[1].trim()}_${srx}.bw`;
+    bigwigDiv.addEventListener("click", event => {
+        if (!window.showSaveFilePicker) return;  // let the browser download it natively
+        event.preventDefault();
+        STATE.downloader.download(bigwigDiv.href, {name: bigwigFilename});
+    });
+    setTimeout(async () => {
+        let response = await fetchUrl(bigwigDiv.href, {method: "HEAD"});
+        let size = formatNumber(Number(response.headers.get("Content-Length")), {notation: "si", precision: 0.01, thousands: ","});
+        bigwigSizeDiv.textContent = ` (${size}B)`;
+        bigwigSizeDiv.classList.add("appear-smoothly");
+    }, 0);
+    /*
     let bigwigDiv = processedDiv.appendChild(document.createElement("a"));
     let bigwigNameDiv = bigwigDiv.appendChild(document.createElement("span"));
     let bigwigSizeDiv = bigwigDiv.appendChild(document.createElement("span"));
@@ -1998,6 +2179,7 @@ async function showFullSample({genome, key, isNavigation=false}={}) {
         bigwigSizeDiv.textContent = ` (${size}B)`;
         bigwigSizeDiv.classList.add("appear-smoothly");
     }, 0);
+    */
 
     [keyDiv, valueDiv] = makeKeyValueDiv(linksDiv);
     let targetSearchTerm  = data[6].match(/^([^(]*).*$/)[1].trim();
@@ -2274,6 +2456,228 @@ let ENAUtil = (() => {
 })();
 
 
+function formatBytes(bytes) {
+    return `${formatNumber(bytes, {notation: "si", precision: 0.01, thousands: ","})}B`;
+}
+
+
+function formatDuration(seconds) {
+    if (!Number.isFinite(seconds) || seconds < 0) return "";
+    seconds = Math.round(seconds);
+    if (seconds < 60) return `${seconds}s`;
+    let minutes = Math.floor(seconds / 60);
+    if (minutes < 60) return `${minutes}m${String(seconds % 60).padStart(2, "0")}s`;
+    let hours = Math.floor(minutes / 60);
+    if (hours < 24) return `${hours}h${String(minutes % 60).padStart(2, "0")}m`;
+    return `${Math.floor(hours / 24)}d${String(hours % 24).padStart(2, "0")}h`;
+}
+
+
+class Downloader {
+    constructor() {
+        this.tasks = [];
+        this.taskDivs = new Map();
+        this.updateModelInterval = null;
+    }
+    async download(url, {name}={}) {
+        if (!window.showSaveFilePicker) return null;
+        let suggestedName = name ?? url.split("?")[0].split("/").pop();
+        let handle;
+        try {
+            handle = await window.showSaveFilePicker({suggestedName});
+        } catch (error) {
+            return null; // user cancelled the picker
+        }
+        let task = {
+            url,
+            name: handle.name || suggestedName,
+            status: "downloading",
+            loaded: 0,
+            total: null,
+            speed: null,
+            error: null,
+            controller: new AbortController(),
+            startDate: Date.now(),
+            endDate: null,
+            speedDate: Date.now(),
+            speedLoaded: 0,
+        };
+        this.tasks.push(task);
+        this.updateCounter();
+        try {
+            let response = await fetch(url, {signal: task.controller.signal});
+            if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
+            let total = Number(response.headers.get("Content-Length"));
+            task.total = (Number.isFinite(total) && total > 0) ? total : null;
+            let counter = new TransformStream({
+                transform: (chunk, controller) => {
+                    task.loaded += chunk.byteLength;
+                    controller.enqueue(chunk);
+                },
+            });
+            let writable = await handle.createWritable();
+            await response.body
+                .pipeThrough(counter)
+                .pipeTo(writable, {signal: task.controller.signal});
+            task.status = "done";
+            task.total = task.loaded;
+        } catch (error) {
+            task.status = task.controller.signal.aborted ? "cancelled" : "error";
+            task.error = error?.message ?? String(error);
+        }
+        task.endDate = Date.now();
+        task.speed = null;
+        this.updateCounter();
+        return task;
+    }
+    cancel(task) {
+        if (task.status === "downloading") task.controller.abort();
+    }
+    remove(task) {
+        this.cancel(task);
+        let index = this.tasks.indexOf(task);
+        if (index !== -1) this.tasks.splice(index, 1);
+        this.updateCounter();
+    }
+    retry(task) {
+        this.remove(task);
+        return this.download(task.url, {name: task.name});
+    }
+    clearFinished() {
+        for (let task of this.tasks.slice()) {
+            if (task.status !== "downloading") this.remove(task);
+        }
+    }
+    updateCounter() {
+        let now = Date.now();
+        for (let task of this.tasks) {
+            if (task.status !== "downloading") continue;
+            let elapsed = (now - task.speedDate) / 1000;
+            if (elapsed < 0.5) continue;
+            let speed = (task.loaded - task.speedLoaded) / elapsed;
+            task.speed = (task.speed == null) ? speed : 0.7 * task.speed + 0.3 * speed;
+            task.speedDate = now;
+            task.speedLoaded = task.loaded;
+        }
+        let downloading = this.tasks.filter(task => task.status === "downloading").length;
+        let controlDiv = document.querySelector("#download-control");
+        controlDiv.dataset.symbol = (downloading > 0) ? "downloading" : "download";
+        controlDiv.dataset.error = this.tasks.some(task => task.status === "error") ? "true" : "false";
+        document.querySelector("#current-download-count").textContent = downloading;
+        document.querySelector("#current-download-label").textContent = (downloading === 1) ? "Download" : "Downloads";
+    }
+    showModal() {
+        document.querySelector("#download-modal").dataset.visible = "true";
+        this.updateModal();
+        if (!this.updateModelInterval) {
+            this.updateModelInterval = setInterval(() => this.updateModal(), 200);
+        }
+    }
+    hideModal() {
+        document.querySelector("#download-modal").dataset.visible = "false";
+        if (this.updateModelInterval) {
+            clearInterval(this.updateModelInterval);
+            this.updateModelInterval = null;
+        }
+    }
+    updateModal() {
+        let list = document.querySelector("#download-modal > .panel > .list");
+        for (let [task, taskDiv] of this.taskDivs) {
+            if (this.tasks.includes(task)) continue;
+            taskDiv.remove();
+            this.taskDivs.delete(task);
+        }
+        for (let task of this.tasks) {
+            let taskDiv = this.taskDivs.get(task);
+            if (!taskDiv) {
+                taskDiv = this.makeTaskDiv(task);
+                this.taskDivs.set(task, taskDiv);
+            }
+            if (taskDiv.parentElement !== list) list.appendChild(taskDiv);
+            this.updateTaskDiv(task, taskDiv);
+        }
+    }
+    makeTaskDiv(task) {
+        let taskDiv = document.createElement("div");
+        taskDiv.classList.add("task", "appear-smoothly");
+
+        let headerDiv = taskDiv.appendChild(document.createElement("div"));
+        headerDiv.classList.add("header");
+        let nameDiv = headerDiv.appendChild(document.createElement("div"));
+        nameDiv.classList.add("name");
+        nameDiv.textContent = task.name;
+        nameDiv.title = task.url;
+        headerDiv.appendChild(document.createElement("div")).classList.add("percent");
+
+        let barDiv = taskDiv.appendChild(document.createElement("div"));
+        barDiv.classList.add("bar");
+        barDiv.appendChild(document.createElement("div"));
+
+        let detailsDiv = taskDiv.appendChild(document.createElement("div"));
+        detailsDiv.classList.add("details");
+        detailsDiv.appendChild(document.createElement("div")).classList.add("status");
+        for (let [className, symbol, label, onclick] of [
+            ["cancel", "close", "Cancel", () => this.cancel(task)],
+            ["retry", "refresh", "Retry", () => this.retry(task)],
+            ["remove", "delete", "Remove", () => this.remove(task)],
+        ]) {
+            let actionDiv = detailsDiv.appendChild(document.createElement("div"));
+            actionDiv.classList.add(className, "symbol-left", "symbol-colored");
+            actionDiv.dataset.symbol = symbol;
+            actionDiv.textContent = label;
+            actionDiv.onclick = () => {
+                onclick();
+                this.updateModal();
+            };
+        }
+        return taskDiv;
+    }
+    updateTaskDiv(task, taskDiv) {
+        let ratio = (task.total != null) ? Math.min(1, task.loaded / task.total) : null;
+        let indeterminate = (task.status === "downloading") && (ratio == null);
+        taskDiv.dataset.status = task.status;
+        taskDiv.dataset.indeterminate = indeterminate ? "true" : "false";
+
+        let fillDiv = taskDiv.querySelector(".bar > div");
+        fillDiv.style.width = indeterminate ? "" : `${100 * ((task.status === "done") ? 1 : (ratio ?? 0))}%`;
+
+        taskDiv.querySelector(".percent").textContent =
+            (task.status === "done") ? "Done"
+            : (task.status === "cancelled") ? "Cancelled"
+            : (task.status === "error") ? "Failed"
+            : (ratio == null) ? ""
+            : `${Math.floor(100 * ratio)}%`;
+        taskDiv.querySelector(".status").textContent = this.taskStatusText(task);
+    }
+    taskStatusText(task) {
+        let parts = [];
+        if (task.status === "downloading") {
+            parts.push((task.total != null)
+                ? `${formatBytes(task.loaded)} / ${formatBytes(task.total)}`
+                : formatBytes(task.loaded));
+            if (task.speed) {
+                parts.push(`${formatBytes(task.speed)}/s`);
+                if (task.total != null) {
+                    let eta = formatDuration((task.total - task.loaded) / task.speed);
+                    if (eta) parts.push(`${eta} left`);
+                }
+            }
+        } else if (task.status === "done") {
+            parts.push(formatBytes(task.loaded));
+            let duration = formatDuration((task.endDate - task.startDate) / 1000);
+            if (duration) parts.push(`in ${duration}`);
+        } else if (task.status === "cancelled") {
+            parts.push(`Cancelled after ${formatBytes(task.loaded)}`);
+        } else {
+            parts.push(task.error || "Download failed");
+        }
+        return parts.join(" · ");
+    }
+}
+STATE.downloader = new Downloader();
+setInterval(() => STATE.downloader.updateCounter(), 200);
+
+
 async function main() {
 
     STATE.infiniteScrolling.samples = setupInfiniteScroll(
@@ -2299,6 +2703,15 @@ async function main() {
             await searchSamples();
         };
     }
+
+    document.querySelector("#download-modal").onclick = event => {
+        if (event.target === event.currentTarget) STATE.downloader.hideModal();
+    };
+    document.querySelector("#download-modal-close").onclick = () => STATE.downloader.hideModal();
+    document.querySelector("#download-modal-clear").onclick = () => STATE.downloader.clearFinished();
+    document.addEventListener("keydown", event => {
+        if (event.key === "Escape") STATE.downloader.hideModal();
+    });
 
     await getAvailableGenomes();
     await searchSamples();
