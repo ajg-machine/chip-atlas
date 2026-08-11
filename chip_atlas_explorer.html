@@ -707,6 +707,7 @@
 let BASE_URL = "https://cdn.jsdelivr.net/gh/ajg-machine/chip-atlas@main";
 let STATE = {
     downloader: null,
+    downloadBaseName: entry => `${entry[6].match(/^([^(]*).*$/)[1].trim()}_${entry[5].match(/^([^(]*).*$/)[1].trim()}_${entry[2]}`,
     genome: {selected: "mm10", available: null},
     database: {},
     targetsSummaries: {},
@@ -2127,9 +2128,17 @@ async function showFullSample({genome, key, isNavigation=false}={}) {
             if (paths.length !== sizes.length) continue;
             if ((paths.length !== 1 && paths.length !== 2) || paths[0].length === 0) continue;
             for (let i = 0; i < paths.length; i++) {
+                let downloadName = paths[i].split("/").pop();
+                downloadName = downloadName.replace(/_(R?[12])?.fastq/, ".r$1.fastq");
+                downloadName = `${STATE.downloadBaseName(data)}_${downloadName}`;
                 let link = fastqDiv.appendChild(document.createElement("a"));
                 link.href = `https://${paths[i]}`;
                 link.textContent = paths.length === 1 ? "Single-end" : `R${i + 1}`;
+                link.addEventListener("click", event => {
+                    if (!window.showSaveFilePicker) return;  // let the browser download it natively
+                    event.preventDefault();
+                    STATE.downloader.download(link.href, {name: downloadName});
+                });
                 let size = formatNumber(Number(sizes[i]), {notation: "si", precision: 0.01, thousands: ","});
                 link.textContent += ` (${size}B)`;
                 link.classList.add("appear-smoothly");
@@ -2143,11 +2152,10 @@ async function showFullSample({genome, key, isNavigation=false}={}) {
     let peaksDiv = processedDiv.appendChild(document.createElement("a"));
     peaksDiv.href = `https://chip-atlas.dbcls.jp/data/${data[4]}/eachData/bed05/${srx}.05.bed`;
     peaksDiv.textContent = "Peaks";
-    let peaksFilename = `${data[6].match(/^([^(]*).*$/)[1].trim()}_${data[5].match(/^([^(]*).*$/)[1].trim()}_${srx}.05.bed`;
     peaksDiv.addEventListener("click", event => {
         if (!window.showSaveFilePicker) return;  // let the browser download it natively
         event.preventDefault();
-        STATE.downloader.download(peaksDiv.href, {name: peaksFilename});
+        STATE.downloader.download(peaksDiv.href, {name: `${STATE.downloadBaseName(data)}.05.bed`});
     });
 
     let bigwigDiv = processedDiv.appendChild(document.createElement("a"));
@@ -2155,11 +2163,10 @@ async function showFullSample({genome, key, isNavigation=false}={}) {
     let bigwigSizeDiv = bigwigDiv.appendChild(document.createElement("span"));
     bigwigDiv.href = `https://chip-atlas.dbcls.jp/data/${data[4]}/eachData/bw/${srx}.bw`;
     bigwigNameDiv.textContent = "Bigwig";
-    let bigwigFilename = `${data[6].match(/^([^(]*).*$/)[1].trim()}_${data[5].match(/^([^(]*).*$/)[1].trim()}_${srx}.bw`;
     bigwigDiv.addEventListener("click", event => {
         if (!window.showSaveFilePicker) return;  // let the browser download it natively
         event.preventDefault();
-        STATE.downloader.download(bigwigDiv.href, {name: bigwigFilename});
+        STATE.downloader.download(bigwigDiv.href, {name: `${STATE.downloadBaseName(data)}.bw`});
     });
     setTimeout(async () => {
         let response = await fetchUrl(bigwigDiv.href, {method: "HEAD"});
