@@ -2480,6 +2480,34 @@ function formatDuration(seconds) {
 }
 
 
+const DOWNLOAD_MIME_TYPES = {
+    ".bed": "text/plain",
+    ".bw": "application/octet-stream",
+    ".bigwig": "application/octet-stream",
+    ".bz2": "application/x-bzip2",
+    ".csv": "text/csv",
+    ".fastq": "text/plain",
+    ".gz": "application/gzip",
+    ".json": "application/json",
+    ".tsv": "text/tab-separated-values",
+    ".txt": "text/plain",
+    ".zip": "application/zip",
+};
+const DOWNLOAD_COMPRESSION_EXTENSIONS = new Set([".gz", ".bz2", ".xz", ".zip", ".zst"]);
+
+// Windows only keeps the extension of the suggested name when the save picker has a
+// matching file type filter, so build one out of the name we are suggesting.
+function makeFilePickerTypes(name) {
+    let parts = name.toLowerCase().split(".");
+    if (parts.length < 2) return [];
+    let extension = `.${parts.pop()}`;
+    let mimeType = DOWNLOAD_MIME_TYPES[extension] ?? "application/octet-stream";
+    if (DOWNLOAD_COMPRESSION_EXTENSIONS.has(extension) && parts.length > 1) extension = `.${parts.pop()}${extension}`;
+    if (!/^\.[a-z0-9+][a-z0-9+.-]{0,14}$/.test(extension) || extension.endsWith(".")) return [];
+    return [{description: `${extension.slice(1).toUpperCase()} file`, accept: {[mimeType]: [extension]}}];
+}
+
+
 class Downloader {
     constructor() {
         this.tasks = [];
@@ -2490,11 +2518,22 @@ class Downloader {
         if (!window.showSaveFilePicker) return null;
         let suggestedName = name ?? url.split("?")[0].split("/").pop();
         let startIn = "downloads";
+        let options = {suggestedName, startIn};
+        let types = makeFilePickerTypes(suggestedName);
+        if (types.length > 0) {
+            options.types = types;
+            options.excludeAcceptAllOption = true;  // "All files" drops the extension on Windows
+        }
         let handle;
         try {
-            handle = await window.showSaveFilePicker({suggestedName, startIn});
+            handle = await window.showSaveFilePicker(options);
         } catch (error) {
-            return null; // user cancelled the picker
+            if (error?.name === "AbortError" || !options.types) return null; // user cancelled the picker
+            try {  // the file type filter was rejected: retry without it
+                handle = await window.showSaveFilePicker({suggestedName, startIn});
+            } catch (error) {
+                return null; // user cancelled the picker
+            }
         }
         let task = {
             url,
