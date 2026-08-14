@@ -823,6 +823,40 @@ function arabicToRoman(num) {
 }
 
 
+const nativeZstdSupported = (() => {
+    try { new DecompressionStream("zstd"); return true; }
+    catch { return false; }
+})();
+
+let zstdPromise;
+function getZstdStreaming() {
+    if (!zstdPromise) {
+        zstdPromise = import("https://esm.sh/zstd-codec@0.1.5").then(
+            ({ ZstdCodec }) => new Promise(resolve => {
+                ZstdCodec.run(zstd => resolve(new zstd.Streaming()));
+            })
+        );
+    }
+    return zstdPromise;
+}
+
+function zstdFallbackStream() {
+    const chunks = [];
+    let size = 0;
+    return new TransformStream({
+        transform(chunk) {
+            chunks.push(chunk);
+            size += chunk.length;
+        },
+        async flush(controller) {
+            const streaming = await getZstdStreaming();
+            // size_hint is just a perf hint, not a hard requirement —
+            // decompressChunks handles unsized/streamed zstd frames fine.
+            controller.enqueue(streaming.decompressChunks(chunks, size * 3));
+        },
+    });
+}
+
 async function fetchUrl(url, {decompress=null, cache="read+write", ...options}={}) {
     if (options.cache == null) options.cache = "no-cache";
     let cacheKey = JSON.stringify([url, options]);
@@ -848,8 +882,10 @@ async function fetchUrl(url, {decompress=null, cache="read+write", ...options}={
         STATE.fetchHistory.set(cacheKey, cachedResponse);
     }
     if (decompress) {
-        let decompressionStream = new DecompressionStream(decompress);
-        let decompressedStream = response.body.pipeThrough(decompressionStream);
+        const stream = decompress === "zstd" && !nativeZstdSupported
+            ? zstdFallbackStream()
+            : new DecompressionStream(decompress);
+        let decompressedStream = response.body.pipeThrough(stream);
         response = new Response(decompressedStream);
     }
     return response;
@@ -876,10 +912,10 @@ async function getTargetsSummaries({genome}={}) {
     if (STATE.targetsSummaries[genome] != null) return STATE.targetsSummaries[genome];
     STATE.targetsSummaries[genome] = new Promise(async (resolve, reject) => {
         try {
-            let url = `${BASE_URL}/summaries/targets/${genome}.json.br`;
+            let url = `${BASE_URL}/summaries/targets/${genome}.json.zst`;
             let data = {};
             try {
-                let response = await fetchUrl(url, {decompress: "brotli"});
+                let response = await fetchUrl(url, {decompress: "zstd"});
                 data = await response.json();
             } catch (e) {
                 console.error(`No targets summaries for genome ${genome}`);
@@ -918,10 +954,10 @@ async function getCellsSummaries({genome}={}) {
     if (STATE.cellsSummaries[genome] != null) return STATE.cellsSummaries[genome];
     STATE.cellsSummaries[genome] = new Promise(async (resolve, reject) => {
         try {
-            let url = `${BASE_URL}/summaries/cells/${genome}.json.br`;
+            let url = `${BASE_URL}/summaries/cells/${genome}.json.zst`;
             let data = {};
             try {
-                let response = await fetchUrl(url, {decompress: "brotli"});
+                let response = await fetchUrl(url, {decompress: "zstd"});
                 data = await response.json();
             } catch (e) {
                 console.error(`No cells summaries for genome ${genome}`);
@@ -1016,9 +1052,9 @@ async function getDatabase({genome}={}) {
     if (STATE.database[genome]) return STATE.database[genome];
     STATE.database[genome] = new Promise(async (resolve, reject) => {
         try {
-            let file = `${genome}.v2.tsv.br`;
+            let file = `${genome}.v2.tsv.zst`;
             let url = `${BASE_URL}/database/genomes/${file}`;
-            let response = await fetchUrl(url, {decompress: "brotli"});
+            let response = await fetchUrl(url, {decompress: "zstd"});
             let data = await response.text();
             // 12 -> 2 others columns added at the end for targets and cells aliases
             let lines = data.trimEnd().split("\n");
