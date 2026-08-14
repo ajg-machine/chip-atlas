@@ -828,31 +828,31 @@ const nativeZstdSupported = (() => {
     catch { return false; }
 })();
 
-let zstdPromise;
-function getZstdStreaming() {
-    if (!zstdPromise) {
-        zstdPromise = import("https://esm.sh/zstd-codec@0.1.5").then(
-            ({ ZstdCodec }) => new Promise(resolve => {
-                ZstdCodec.run(zstd => resolve(new zstd.Streaming()));
-            })
+let zstdDecoderPromise;
+function getZstdDecoder() {
+    if (!zstdDecoderPromise) {
+        zstdDecoderPromise = import("https://esm.sh/zstddec@0.2.0/stream").then(
+            async ({ ZSTDDecoder }) => {
+                const decoder = new ZSTDDecoder();
+                await decoder.init();
+                return decoder;
+            }
         );
     }
-    return zstdPromise;
+    return zstdDecoderPromise;
 }
 
 function zstdFallbackStream() {
     const chunks = [];
-    let size = 0;
     return new TransformStream({
         transform(chunk) {
             chunks.push(chunk);
-            size += chunk.length;
         },
         async flush(controller) {
-            const streaming = await getZstdStreaming();
-            // size_hint is just a perf hint, not a hard requirement —
-            // decompressChunks handles unsized/streamed zstd frames fine.
-            controller.enqueue(streaming.decompressChunks(chunks, size * 3));
+            const decoder = await getZstdDecoder();
+            for (const piece of decoder.decodeStreaming(chunks)) {
+                controller.enqueue(piece);
+            }
         },
     });
 }
