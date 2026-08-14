@@ -876,10 +876,10 @@ async function getTargetsSummaries({genome}={}) {
     if (STATE.targetsSummaries[genome] != null) return STATE.targetsSummaries[genome];
     STATE.targetsSummaries[genome] = new Promise(async (resolve, reject) => {
         try {
-            let url = `${BASE_URL}/summaries/targets/${genome}.json.gz`;
+            let url = `${BASE_URL}/summaries/targets/${genome}.json.br`;
             let data = {};
             try {
-                let response = await fetchUrl(url, {decompress: "gzip"});
+                let response = await fetchUrl(url, {decompress: "brotli"});
                 data = await response.json();
             } catch (e) {
                 console.error(`No targets summaries for genome ${genome}`);
@@ -918,10 +918,10 @@ async function getCellsSummaries({genome}={}) {
     if (STATE.cellsSummaries[genome] != null) return STATE.cellsSummaries[genome];
     STATE.cellsSummaries[genome] = new Promise(async (resolve, reject) => {
         try {
-            let url = `${BASE_URL}/summaries/cells/${genome}.json.gz`;
+            let url = `${BASE_URL}/summaries/cells/${genome}.json.br`;
             let data = {};
             try {
-                let response = await fetchUrl(url, {decompress: "gzip"});
+                let response = await fetchUrl(url, {decompress: "brotli"});
                 data = await response.json();
             } catch (e) {
                 console.error(`No cells summaries for genome ${genome}`);
@@ -1016,9 +1016,9 @@ async function getDatabase({genome}={}) {
     if (STATE.database[genome]) return STATE.database[genome];
     STATE.database[genome] = new Promise(async (resolve, reject) => {
         try {
-            let file = `${genome}.v2.tsv.gz`;
+            let file = `${genome}.v2.tsv.br`;
             let url = `${BASE_URL}/database/genomes/${file}`;
-            let response = await fetchUrl(url, {decompress: "deflate"});
+            let response = await fetchUrl(url, {decompress: "brotli"});
             let data = await response.text();
             // 12 -> 2 others columns added at the end for targets and cells aliases
             let lines = data.trimEnd().split("\n");
