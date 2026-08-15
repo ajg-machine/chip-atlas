@@ -24,7 +24,7 @@
                 --font-size: 14px;
                 --line-height: 1.2;
                 --font-weight: 400;
-                --font-weight-bold: 700;
+                --font-weight-bold: 600;
                 --font-family: "Barlow", system-ui, sans-serif;
                 --font-family-mono: ui-monospace, monospace;
                 --font-family-condensed: "Barlow Semi Condensed", system-ui, sans-serif;
@@ -257,12 +257,17 @@
                 display: grid;
                 grid-template-columns: repeat(5, max-content) auto;
                 column-gap: 15px;
-                row-gap: 10px;
             }
             #samples-list > div {
                 display: grid;
                 grid-column: span 6;
                 grid-template-columns: subgrid;
+            }
+            #samples-list > div:not(:first-child) {
+                padding-top: 5px;
+            }
+            #samples-list > div:not(:last-child) {
+                padding-bottom: 5px;
             }
             #samples-list > div:not(:nth-child(1)):hover {
                 color: var(--accent-color);
@@ -270,6 +275,14 @@
             }
             #samples-list > div:not(:nth-child(1)) > :not(div:nth-child(6)) > span {
                 cursor: text;
+            }
+            #samples-list > div:hover:not(:has(span:hover)) > div:nth-child(6) {
+                color: var(--accent-color);
+                font-weight: var(--font-weight-bold);
+            }
+            #samples-list > div > div:nth-child(6):hover {
+                color: var(--accent-color);
+                font-weight: var(--font-weight-bold);
             }
             #samples-list > div:nth-child(1) > div {
                 font-weight: var(--font-weight-bold);
@@ -282,7 +295,7 @@
                 column-gap: 5px;
             }
             #samples-list > div > div:nth-child(6) {
-                color: var(--accent-color);
+                color: var(--desaturated-accent-color);
                 cursor: pointer;
                 font-family: "Material Symbols Outlined";
                 display: flex;
@@ -1289,6 +1302,7 @@ async function initSearchSamples() {
         : [];
 
     let results;
+    let canNarrow = false;
     if (searchQuery.length === 0) {
         results = Array.from(database);
     } else {
@@ -1300,29 +1314,49 @@ async function initSearchSamples() {
         //   - every previous term is a substring of some new term, i.e. each old
         //     conjunct is implied by a new one, so newMatch(s) => oldMatch(s).
         let prev = STATE.current.search;
-        let canNarrow = prev && prev.list
+        canNarrow = !!(prev && prev.list
             && prev.genome === genome
             && prev.fieldsKey === fieldsKey
             && prev.flat && flat
-            && prev.terms.every(ot => terms.some(nt => nt.includes(ot)));
+            && prev.terms.every(ot => terms.some(nt => nt.includes(ot))));
         let source = canNarrow ? prev.list : database;
         results = source.filter(matchFn);
     }
     
     // Sort results
-    let sortFn = (a, b) => {
-        if (a === "?" || b === "?") {
-            if (a === "?" && b === "?") return 0;
-            if (a === "?") return 1;
-            return -1;
+    // Filtering preserves order, so narrowing from a list that was already
+    // sorted the same way leaves the results sorted: nothing to do.
+    let alreadySorted = canNarrow
+        && STATE.current.search.sortBy === STATE.sort.by
+        && STATE.current.search.sortReverse === STATE.sort.reverse;
+    if (STATE.sort.by != null && results.length > 1 && !alreadySorted) {
+        // Rows are grouped by their distinct display value, so each string
+        // comparison runs once per distinct value rather than once per pair of
+        // rows. Grouping and concatenation are both stable, so rows sharing a
+        // value keep their relative order. "?" sorts last in both directions.
+        let by = STATE.sort.by;
+        let direction = STATE.sort.reverse ? -1 : 1;
+        let buckets = new Map();
+        for (let i = 0; i < results.length; i++) {
+            let key = results[i][by][0];
+            let bucket = buckets.get(key);
+            if (bucket === undefined) buckets.set(key, bucket = []);
+            bucket.push(results[i]);
         }
-        return (STATE.sort.reverse ? -1 : 1) * a.localeCompare(b);
-        if (a < b) return STATE.sort.reverse ? 1 : -1;
-        if (a > b) return STATE.sort.reverse ? -1 : 1;
-        return 0;
-    };
-    if (STATE.sort.by != null) {
-        results.sort((a, b) => sortFn(a[STATE.sort.by][0], b[STATE.sort.by][0]));
+        let unknown = buckets.get("?");
+        buckets.delete("?");
+        let keys = Array.from(buckets.keys());
+        keys.sort((a, b) => direction * a.localeCompare(b));
+        let sorted = new Array(results.length);
+        let count = 0;
+        for (let key of keys) {
+            let bucket = buckets.get(key);
+            for (let i = 0; i < bucket.length; i++) sorted[count++] = bucket[i];
+        }
+        if (unknown !== undefined) {
+            for (let i = 0; i < unknown.length; i++) sorted[count++] = unknown[i];
+        }
+        results = sorted;
     }
 
     let sampleCount = formatNumber(results.length, {thousands: ","})
@@ -1358,7 +1392,10 @@ async function initSearchSamples() {
     STATE.current.samples.div = samplesDiv;
     STATE.current.samples.list = results;
     // Record this search so the next one can narrow from it when applicable.
-    STATE.current.search = {genome, fieldsKey, flat, terms, list: results};
+    STATE.current.search = {
+        genome, fieldsKey, flat, terms, list: results,
+        sortBy: STATE.sort.by, sortReverse: STATE.sort.reverse,
+    };
     STATE.current.samples.count = 0;
     await showMoreSamples();
     await initListing();
